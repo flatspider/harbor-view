@@ -1,0 +1,351 @@
+/* ============================
+   Harbor Watch — Core Styles
+   Nautical palette:
+   - Deep navy:    #0a1628
+   - Ocean blue:   #1a3a5c
+   - Foam white:   #e8edf2
+   - Brass/gold:   #c9a84c
+   - Warm gray:    #8b9daa
+   ============================ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #0a1628;
+  color: #e8edf2;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ============================
+   Harbor Scene
+   ============================ */
+
+.harbor-scene {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+}
+
+.harbor-background {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    #1a2a40 0%,
+    #1a3a5c 30%,
+    #1e4a6e 50%,
+    #1a4060 70%,
+    #162e48 100%
+  );
+}
+
+/* ============================
+   Wave Overlays
+   ============================ */
+
+.wave-container {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 120px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.wave {
+  position: absolute;
+  bottom: 0;
+  left: -100%;
+  width: 300%;
+  height: 60px;
+}
+
+.wave path {
+  fill: currentColor;
+}
+
+.wave-1 {
+  color: rgba(26, 58, 92, 0.3);
+  animation: waveScroll 20s linear infinite;
+  bottom: 40px;
+}
+
+.wave-2 {
+  color: rgba(30, 74, 110, 0.4);
+  animation: waveScroll 14s linear infinite;
+  animation-delay: -3s;
+  bottom: 20px;
+}
+
+.wave-3 {
+  color: rgba(22, 46, 72, 0.5);
+  animation: waveScroll 8s linear infinite;
+  animation-delay: -1s;
+  bottom: 0;
+}
+
+@keyframes waveScroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(33.33%);
+  }
+}
+
+/* ============================
+   Ship Layer
+   ============================ */
+
+.ship-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+}
+
+.ship-marker {
+  transition: transform 0.15s ease-out;
+}
+
+.ship-marker:hover circle {
+  filter: brightness(1.4);
+}
+
+/* ============================
+   Ship Info Card
+   ============================ */
+
+.ship-info-card {
+  background: rgba(10, 22, 40, 0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(201, 168, 76, 0.3);
+  border-radius: 8px;
+  padding: 16px;
+  min-width: 260px;
+  max-width: 320px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.ship-info-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-left: 3px solid;
+  padding-left: 8px;
+  margin-bottom: 8px;
+}
+
+.ship-category {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #8b9daa;
+}
+
+.ship-info-close {
+  background: none;
+  border: none;
+  color: #8b9daa;
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.ship-info-close:hover {
+  color: #e8edf2;
+}
+
+.ship-name {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #e8edf2;
+}
+
+.ship-info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ship-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ship-info-label {
+  font-size: 12px;
+  color: #8b9daa;
+}
+
+.ship-info-value {
+  font-size: 13px;
+  color: #e8edf2;
+  font-weight: 500;
+}
+
+.ship-mmsi {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(139, 157, 170, 0.2);
+  font-size: 11px;
+  color: rgba(139, 157, 170, 0.6);
+  font-family: monospace;
+}
+
+/* ============================
+   Status Bar
+   ============================ */
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: rgba(10, 22, 40, 0.9);
+  border-bottom: 1px solid rgba(201, 168, 76, 0.2);
+  z-index: 10;
+}
+
+.status-title h1 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #e8edf2;
+}
+
+.status-subtitle {
+  font-size: 12px;
+  color: #8b9daa;
+  margin-left: 12px;
+}
+
+.status-info {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #8b9daa;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot[style*="rgb(46, 160, 67)"] {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.status-ship-count {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  color: #8b9daa;
+}
+
+.ship-count-number {
+  font-size: 20px;
+  font-weight: 600;
+  color: #c9a84c;
+}
+
+/* ============================
+   API Key Input
+   ============================ */
+
+.api-key-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  gap: 24px;
+  padding: 24px;
+}
+
+.api-key-screen h1 {
+  font-size: 36px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.api-key-screen p {
+  color: #8b9daa;
+  max-width: 480px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.api-key-screen a {
+  color: #c9a84c;
+}
+
+.api-key-form {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.api-key-form input {
+  background: rgba(26, 58, 92, 0.5);
+  border: 1px solid rgba(201, 168, 76, 0.3);
+  border-radius: 6px;
+  padding: 10px 16px;
+  color: #e8edf2;
+  font-size: 14px;
+  width: 340px;
+  outline: none;
+}
+
+.api-key-form input:focus {
+  border-color: #c9a84c;
+}
+
+.api-key-form button {
+  background: #c9a84c;
+  color: #0a1628;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.api-key-form button:hover {
+  background: #d4b560;
+}

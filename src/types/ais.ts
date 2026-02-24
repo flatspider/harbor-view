@@ -38,12 +38,14 @@ export interface AISStaticData {
 }
 
 export interface AISMetaData {
-  MMSI: number;
-  MMSI_String: string;
-  ShipName: string;
-  latitude: number;
-  longitude: number;
-  time_utc: string;
+  MMSI?: number;
+  MMSI_String?: string;
+  ShipName?: string;
+  latitude?: number;
+  longitude?: number;
+  Latitude?: number;
+  Longitude?: number;
+  time_utc?: string;
 }
 
 export interface AISMessage {
@@ -52,7 +54,8 @@ export interface AISMessage {
     PositionReport?: AISPositionReport;
     ShipStaticData?: AISStaticData;
   };
-  MetaData: AISMetaData;
+  MetaData?: AISMetaData;
+  Metadata?: AISMetaData;
 }
 
 // Our unified ship data model (merges position + static data)

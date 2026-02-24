@@ -16,7 +16,32 @@ const NY_HARBOR_BOUNDS = {
   east: -73.9,
 } as const;
 
+const NY_HARBOR_POINT = {
+  lat: 40.7003,
+  lon: -74.0128,
+} as const;
+
+const NOAA_STATION_ID = process.env.NOAA_COOPS_STATION_ID ?? "8518750";
+const ADSB_RADIUS_NM = Number(process.env.ADSB_RADIUS_NM ?? 25);
+const STORMGLASS_API_KEY = process.env.STORMGLASS_API_KEY ?? "";
+const PORTWATCH_API_URL =
+  process.env.PORTWATCH_API_URL ??
+  "https://portwatch.imf.org/api/v1/throughput?frequency=daily";
+
+const DATA_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+const DATA_TTL_MS = 2 * 60 * 1000;
+
 type RelayStatus = "connecting" | "connected" | "disconnected" | "error";
+type IntegrationStatus = "ok" | "degraded" | "error" | "skipped";
+
+interface IntegrationSnapshot {
+  id: string;
+  name: string;
+  status: IntegrationStatus;
+  updatedAt: string;
+  message?: string;
+  data: Record<string, string | number | boolean | null>;
+}
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -26,6 +51,10 @@ let upstream: WebSocket | null = null;
 let reconnectTimeout: ReturnType<typeof setTimeout> | undefined;
 let upstreamStatus: RelayStatus = "disconnected";
 let upstreamStatusMessage: string | undefined;
+
+let integrationSnapshots: IntegrationSnapshot[] = [];
+let integrationsLastFetched = 0;
+let integrationsInFlight: Promise<void> | null = null;
 
 function setStatus(state: RelayStatus, message?: string) {
   upstreamStatus = state;
@@ -45,6 +74,103 @@ function scheduleReconnect() {
     reconnectTimeout = undefined;
     connectUpstream();
   }, 3000);
+}
+
+function ensureRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null;
+  return value as Record<string, unknown>;
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function makeSnapshot(
+  id: string,
+  name: string,
+  status: IntegrationStatus,
+  data: Record<string, string | number | boolean | null>,
+  message?: string,
+): IntegrationSnapshot {
+  return {
+    id,
+    name,
+    status,
+    data,
+    message,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+async function fetchJson(
+  url: string,
+  init?: RequestInit,
+  timeoutMs = 7000,
+): Promise<unknown> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...init,
+      headers: {
+        "User-Agent": "harbor-watch/1.0",
+        Accept: "application/json",
+        ...(init?.headers ?? {}),
+      },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    return (await response.json()) as unknown;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchText(
+  url: string,
+  init?: RequestInit,
+  timeoutMs = 7000,
+): Promise<string> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...init,
+      headers: {
+        "User-Agent": "harbor-watch/1.0",
+        Accept: "text/plain,text/csv,text/html,*/*",
+        ...(init?.headers ?? {}),
+      },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    return await response.text();
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function isAisMessage(value: unknown): value is AISMessage {
@@ -180,12 +306,339 @@ function connectUpstream() {
   });
 }
 
+async function getNoaaCoopsSnapshot(): Promise<IntegrationSnapshot> {
+  try {
+    const [waterLevelRaw, predictionsRaw] = await Promise.all([
+      fetchJson(
+        `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=latest&station=${NOAA_STATION_ID}&product=water_level&datum=MLLW&time_zone=gmt&units=metric&format=json`,
+      ),
+      fetchJson(
+        `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=latest&station=${NOAA_STATION_ID}&product=predictions&datum=MLLW&time_zone=gmt&units=metric&interval=hilo&format=json`,
+      ),
+    ]);
+
+    const waterRecord = ensureRecord(waterLevelRaw);
+    const waterData = asArray(waterRecord?.data);
+    const latestWater = ensureRecord(waterData[waterData.length - 1]);
+
+    const predictionRecord = ensureRecord(predictionsRaw);
+    const predictions = asArray(predictionRecord?.predictions);
+    const nextTide = ensureRecord(predictions[0]);
+
+    const waterLevelMeters = asNumber(latestWater?.v);
+    const trend = asString(latestWater?.f);
+
+    return makeSnapshot("noaa-coops", "NOAA CO-OPS", "ok", {
+      stationId: NOAA_STATION_ID,
+      waterLevelM: waterLevelMeters,
+      trend,
+      nextTideHeightM: asNumber(nextTide?.v),
+      nextTideAt: asString(nextTide?.t),
+    });
+  } catch (error) {
+    return makeSnapshot(
+      "noaa-coops",
+      "NOAA CO-OPS",
+      "error",
+      {
+        stationId: NOAA_STATION_ID,
+      },
+      error instanceof Error ? error.message : "Unable to fetch NOAA CO-OPS",
+    );
+  }
+}
+
+async function getOpenMeteoSnapshot(): Promise<IntegrationSnapshot> {
+  try {
+    const url =
+      "https://marine-api.open-meteo.com/v1/marine" +
+      `?latitude=${NY_HARBOR_POINT.lat}&longitude=${NY_HARBOR_POINT.lon}` +
+      "&current=wave_height,swell_wave_height,swell_wave_period,sea_surface_temperature";
+
+    const raw = await fetchJson(url);
+    const record = ensureRecord(raw);
+    const current = ensureRecord(record?.current);
+
+    return makeSnapshot("open-meteo-marine", "Open-Meteo Marine", "ok", {
+      waveHeightM: asNumber(current?.wave_height),
+      swellHeightM: asNumber(current?.swell_wave_height),
+      swellPeriodS: asNumber(current?.swell_wave_period),
+      seaSurfaceTempC: asNumber(current?.sea_surface_temperature),
+      currentTime: asString(current?.time),
+    });
+  } catch (error) {
+    return makeSnapshot(
+      "open-meteo-marine",
+      "Open-Meteo Marine",
+      "error",
+      {},
+      error instanceof Error
+        ? error.message
+        : "Unable to fetch Open-Meteo Marine",
+    );
+  }
+}
+
+async function getNwsSnapshot(): Promise<IntegrationSnapshot> {
+  try {
+    const pointUrl = `https://api.weather.gov/points/${NY_HARBOR_POINT.lat},${NY_HARBOR_POINT.lon}`;
+    const pointRaw = await fetchJson(pointUrl);
+    const point = ensureRecord(pointRaw);
+    const pointProperties = ensureRecord(point?.properties);
+
+    const forecastUrl = asString(pointProperties?.forecast);
+    if (!forecastUrl) {
+      throw new Error("Missing forecast URL from api.weather.gov/points response");
+    }
+
+    const [forecastRaw, alertsRaw] = await Promise.all([
+      fetchJson(forecastUrl),
+      fetchJson(
+        `https://api.weather.gov/alerts/active?point=${NY_HARBOR_POINT.lat},${NY_HARBOR_POINT.lon}`,
+      ),
+    ]);
+
+    const forecast = ensureRecord(forecastRaw);
+    const forecastProperties = ensureRecord(forecast?.properties);
+    const forecastPeriods = asArray(forecastProperties?.periods);
+    const firstPeriod = ensureRecord(forecastPeriods[0]);
+
+    const alerts = ensureRecord(alertsRaw);
+    const alertFeatures = asArray(alerts?.features);
+
+    return makeSnapshot("nws", "NWS", "ok", {
+      forecastPeriod: asString(firstPeriod?.name),
+      forecastTempF: asNumber(firstPeriod?.temperature),
+      forecastWind: asString(firstPeriod?.windSpeed),
+      forecastSummary: asString(firstPeriod?.shortForecast),
+      activeAlerts: alertFeatures.length,
+    });
+  } catch (error) {
+    return makeSnapshot(
+      "nws",
+      "NWS",
+      "error",
+      {},
+      error instanceof Error ? error.message : "Unable to fetch NWS data",
+    );
+  }
+}
+
+async function getAdsbSnapshot(): Promise<IntegrationSnapshot> {
+  try {
+    const raw = await fetchJson(
+      `https://api.adsb.lol/v2/lat/${NY_HARBOR_POINT.lat}/lon/${NY_HARBOR_POINT.lon}/dist/${ADSB_RADIUS_NM}`,
+    );
+    const record = ensureRecord(raw);
+
+    const ac = asArray(record?.ac);
+    const messages = asNumber(record?.msg);
+
+    return makeSnapshot("adsb", "adsb.lol", "ok", {
+      radiusNm: ADSB_RADIUS_NM,
+      aircraftCount: ac.length,
+      messages,
+      now: asNumber(record?.now),
+    });
+  } catch (error) {
+    return makeSnapshot(
+      "adsb",
+      "adsb.lol",
+      "error",
+      {
+        radiusNm: ADSB_RADIUS_NM,
+      },
+      error instanceof Error ? error.message : "Unable to fetch adsb.lol",
+    );
+  }
+}
+
+async function getAccessAisSnapshot(): Promise<IntegrationSnapshot> {
+  try {
+    const html = await fetchText("https://marinecadastre.gov/accessais/");
+    const matches = html.match(/\.zip/gi);
+
+    return makeSnapshot("accessais", "NOAA AccessAIS", "ok", {
+      sourceUrl: "https://marinecadastre.gov/accessais/",
+      zipLinksDetected: matches?.length ?? 0,
+      hasArchiveLinks: (matches?.length ?? 0) > 0,
+    });
+  } catch (error) {
+    return makeSnapshot(
+      "accessais",
+      "NOAA AccessAIS",
+      "error",
+      {
+        sourceUrl: "https://marinecadastre.gov/accessais/",
+      },
+      error instanceof Error ? error.message : "Unable to fetch AccessAIS",
+    );
+  }
+}
+
+async function getPortWatchSnapshot(): Promise<IntegrationSnapshot> {
+  try {
+    const raw = await fetchJson(PORTWATCH_API_URL);
+    const record = ensureRecord(raw);
+
+    const dataArray = asArray(record?.data);
+    const featuresArray = asArray(record?.features);
+
+    if (dataArray.length === 0 && featuresArray.length === 0) {
+      return makeSnapshot(
+        "portwatch",
+        "IMF PortWatch",
+        "degraded",
+        {
+          endpoint: PORTWATCH_API_URL,
+          records: 0,
+        },
+        "Endpoint reachable but returned no data array",
+      );
+    }
+
+    const total = dataArray.length > 0 ? dataArray.length : featuresArray.length;
+
+    return makeSnapshot("portwatch", "IMF PortWatch", "ok", {
+      endpoint: PORTWATCH_API_URL,
+      records: total,
+    });
+  } catch (error) {
+    return makeSnapshot(
+      "portwatch",
+      "IMF PortWatch",
+      "error",
+      {
+        endpoint: PORTWATCH_API_URL,
+      },
+      error instanceof Error
+        ? error.message
+        : "Unable to fetch IMF PortWatch",
+    );
+  }
+}
+
+async function getStormglassSnapshot(): Promise<IntegrationSnapshot> {
+  if (!STORMGLASS_API_KEY) {
+    return makeSnapshot(
+      "stormglass",
+      "Stormglass",
+      "skipped",
+      {
+        configured: false,
+      },
+      "Set STORMGLASS_API_KEY to enable this source",
+    );
+  }
+
+  try {
+    const raw = await fetchJson(
+      "https://api.stormglass.io/v2/weather/point" +
+        `?lat=${NY_HARBOR_POINT.lat}&lng=${NY_HARBOR_POINT.lon}` +
+        "&params=waveHeight,swellHeight,waterTemperature&source=noaa",
+      {
+        headers: {
+          Authorization: STORMGLASS_API_KEY,
+        },
+      },
+    );
+
+    const record = ensureRecord(raw);
+    const hours = asArray(record?.hours);
+    const firstHour = ensureRecord(hours[0]);
+
+    const waveHeight = ensureRecord(firstHour?.waveHeight);
+    const swellHeight = ensureRecord(firstHour?.swellHeight);
+    const waterTemperature = ensureRecord(firstHour?.waterTemperature);
+
+    return makeSnapshot("stormglass", "Stormglass", "ok", {
+      waveHeightM: asNumber(waveHeight?.noaa),
+      swellHeightM: asNumber(swellHeight?.noaa),
+      waterTemperatureC: asNumber(waterTemperature?.noaa),
+      hourTime: asString(firstHour?.time),
+      configured: true,
+    });
+  } catch (error) {
+    return makeSnapshot(
+      "stormglass",
+      "Stormglass",
+      "error",
+      {
+        configured: true,
+      },
+      error instanceof Error ? error.message : "Unable to fetch Stormglass",
+    );
+  }
+}
+
+async function getOfacSnapshot(): Promise<IntegrationSnapshot> {
+  try {
+    const csv = await fetchText("https://www.treasury.gov/ofac/downloads/sdn.csv");
+    const lines = csv.split("\n").filter((line) => line.trim().length > 0);
+
+    return makeSnapshot("ofac-sdn", "OFAC SDN List", "ok", {
+      sourceUrl: "https://www.treasury.gov/ofac/downloads/sdn.csv",
+      entries: Math.max(lines.length - 1, 0),
+      updatedFromDownload: true,
+    });
+  } catch (error) {
+    return makeSnapshot(
+      "ofac-sdn",
+      "OFAC SDN List",
+      "error",
+      {
+        sourceUrl: "https://www.treasury.gov/ofac/downloads/sdn.csv",
+      },
+      error instanceof Error ? error.message : "Unable to fetch OFAC SDN",
+    );
+  }
+}
+
+async function refreshIntegrationSnapshots() {
+  const now = Date.now();
+  if (now - integrationsLastFetched < DATA_TTL_MS && integrationSnapshots.length > 0) {
+    return;
+  }
+
+  if (integrationsInFlight) {
+    await integrationsInFlight;
+    return;
+  }
+
+  integrationsInFlight = (async () => {
+    const next = await Promise.all([
+      getNoaaCoopsSnapshot(),
+      getOpenMeteoSnapshot(),
+      getNwsSnapshot(),
+      getAdsbSnapshot(),
+      getAccessAisSnapshot(),
+      getPortWatchSnapshot(),
+      getStormglassSnapshot(),
+      getOfacSnapshot(),
+    ]);
+
+    integrationSnapshots = next;
+    integrationsLastFetched = Date.now();
+  })();
+
+  try {
+    await integrationsInFlight;
+  } finally {
+    integrationsInFlight = null;
+  }
+}
+
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     upstreamStatus,
     upstreamStatusMessage,
     shipCount: ships.size,
+    integrationsCount: integrationSnapshots.length,
+    integrationsLastFetched:
+      integrationsLastFetched > 0
+        ? new Date(integrationsLastFetched).toISOString()
+        : null,
   });
 });
 
@@ -194,6 +647,19 @@ app.get("/api/ships", (_req, res) => {
     status: upstreamStatus,
     message: upstreamStatusMessage,
     ships: Array.from(ships.values()),
+  });
+});
+
+app.get("/api/data-sources", async (_req, res) => {
+  await refreshIntegrationSnapshots();
+
+  res.json({
+    status: "ok",
+    updatedAt:
+      integrationsLastFetched > 0
+        ? new Date(integrationsLastFetched).toISOString()
+        : null,
+    sources: integrationSnapshots,
   });
 });
 
@@ -208,12 +674,17 @@ setInterval(() => {
   }
 }, 30000);
 
+setInterval(() => {
+  void refreshIntegrationSnapshots();
+}, DATA_REFRESH_INTERVAL_MS);
+
 httpServer.listen(PORT, () => {
   console.log(`Harbor Watch server listening on http://localhost:${PORT}`);
 });
 
 ViteExpress.bind(app, httpServer, () => {
   connectUpstream();
+  void refreshIntegrationSnapshots();
 })
   .catch((error: unknown) => {
     console.error("Failed to bind ViteExpress", error);

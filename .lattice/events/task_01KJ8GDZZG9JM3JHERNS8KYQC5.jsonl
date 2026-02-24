@@ -1,0 +1,2 @@
+{"actor":"human:conor","data":{"priority":"medium","short_id":"HAR-5","status":"backlog","title":"Review code","type":"task"},"id":"ev_01KJ8GDZZH88FF5MJZX640YGMP","schema_version":1,"task_id":"task_01KJ8GDZZG9JM3JHERNS8KYQC5","ts":"2026-02-24T19:01:21Z","type":"task_created"}
+{"actor":"human:conor","data":{"force":true,"from":"backlog","reason":"Test task, deleting","to":"done"},"id":"ev_01KJ8H3MNY8YNY498DHP1BMWFW","provenance":{"reason":"Test task, deleting"},"schema_version":1,"task_id":"task_01KJ8GDZZG9JM3JHERNS8KYQC5","ts":"2026-02-24T19:13:10Z","type":"status_changed"}

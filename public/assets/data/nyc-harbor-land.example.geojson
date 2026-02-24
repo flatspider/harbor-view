@@ -1,0 +1,24 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Example Manhattan-ish polygon"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-74.033, 40.701],
+            [-74.02, 40.761],
+            [-73.985, 40.78],
+            [-73.968, 40.732],
+            [-73.988, 40.703],
+            [-74.033, 40.701]
+          ]
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 3,
+  "complexity": null,
+  "created_at": "2026-02-24T19:23:54Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-24T19:31:12Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJ8J4N122N8EV5WXEG4VV4YW",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJ8HQA7K3BSR079XS72RH2BA",
+  "last_event_id": "ev_01KJ8J4N34EJX5P53HFCA0HSF3",
+  "last_status_changed_at": "2026-02-24T19:31:12Z",
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-02-24T19:24:13Z",
+      "created_by": "agent:codex",
+      "note": null,
+      "target_task_id": "task_01KJ8HPZSVRNRBXCE5C5RK7T9M",
+      "type": "subtask_of"
+    }
+  ],
+  "reopened_count": 1,
+  "schema_version": 1,
+  "short_id": "HAR-28",
+  "status": "done",
+  "tags": null,
+  "title": "Open-Meteo Marine credential check (confirm no key required)",
+  "type": "task",
+  "updated_at": "2026-02-24T19:31:12Z",
+  "urgency": null
+}

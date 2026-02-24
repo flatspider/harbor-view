@@ -1,0 +1,40 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 2,
+  "complexity": null,
+  "created_at": "2026-02-24T19:18:14Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-24T19:22:20Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJ8HMDRE4P48JAHW3CHXAMKC",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJ8HCXC2CCSH82HZ1XBS4MX8",
+  "last_event_id": "ev_01KJ8HMDTWEMFH0SKZ2RZMPG21",
+  "last_status_changed_at": "2026-02-24T19:22:20Z",
+  "priority": "medium",
+  "relationships_out": [
+    {
+      "created_at": "2026-02-24T19:18:22Z",
+      "created_by": "agent:codex",
+      "note": null,
+      "target_task_id": "task_01KJ8HCKJF4GDRNGTAPWZ8KE3M",
+      "type": "subtask_of"
+    }
+  ],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-21",
+  "status": "done",
+  "tags": null,
+  "title": "adsb.lol integration (flight positions REST)",
+  "type": "task",
+  "updated_at": "2026-02-24T19:22:20Z",
+  "urgency": null
+}

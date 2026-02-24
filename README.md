@@ -1,6 +1,6 @@
 # Harbor Watch
 
-Real-time New York Harbor vessel visualization built with React + Vite, backed by an Express relay that consumes AISStream over WebSocket.
+Real-time New York Harbor vessel visualization built with React + Vite + Three.js, backed by an Express relay that consumes AISStream over WebSocket.
 
 ## Why a backend relay
 
@@ -12,6 +12,11 @@ AISStream authentication should run on the server, not in browser code. The fron
 
 ```env
 AISSTREAM_API_KEY=your_aisstream_key
+NOAA_COOPS_STATION_ID=8518750
+ADSB_RADIUS_NM=25
+# Optional:
+# STORMGLASS_API_KEY=your_stormglass_key
+# PORTWATCH_API_URL=https://portwatch.imf.org/api/v1/throughput?frequency=daily
 ```
 
 2. Install dependencies:
@@ -42,3 +47,29 @@ bun run dev
   - Connects to `wss://stream.aisstream.io/v0/stream`
   - Sends AIS subscription (NY Harbor bounding box)
   - Caches/merges AIS messages and serves snapshots at `GET /api/ships`
+  - Aggregates external integrations and serves status/metrics at `GET /api/data-sources`
+
+## Data Sources
+
+### Currently Integrated
+- AISStream.io (live ship positions via WebSocket)
+- NOAA CO-OPS (tides/water level snapshots)
+- Open-Meteo Marine (wave/swell/sea temperature)
+- NWS (`api.weather.gov` forecast + active alerts)
+- adsb.lol (nearby flight position summary)
+- NOAA AccessAIS (historical AIS source availability checks)
+- IMF PortWatch (trade disruption endpoint polling)
+- OFAC SDN list (download/count refresh)
+
+### Optional Integration
+- Stormglass (enabled when `STORMGLASS_API_KEY` is configured)
+
+## Harbor Land Geometry (Optional)
+
+For coastline and land-mass rendering in the Three.js harbor scene, add:
+
+- `public/assets/data/nyc-harbor-land.geojson`
+
+Format details are in [`public/assets/data/README.md`](./public/assets/data/README.md), with a starter template in:
+
+- `public/assets/data/nyc-harbor-land.example.geojson`

@@ -7,6 +7,8 @@ interface ShipInfoCardProps {
   ship: ShipData;
   x: number;
   y: number;
+  sceneWidth: number;
+  sceneHeight: number;
   onClose: () => void;
 }
 
@@ -26,7 +28,22 @@ const CATEGORY_COLORS: Record<string, string> = {
   other: "#6b7b8d",
 };
 
-export function ShipInfoCard({ ship, x, y, onClose }: ShipInfoCardProps) {
+const CARD_WIDTH = 320;
+const CARD_HEIGHT = 240;
+const CARD_PADDING = 12;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+export function ShipInfoCard({
+  ship,
+  x,
+  y,
+  sceneWidth,
+  sceneHeight,
+  onClose,
+}: ShipInfoCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const category = getShipCategory(ship.shipType);
 
@@ -57,8 +74,16 @@ export function ShipInfoCard({ ship, x, y, onClose }: ShipInfoCardProps) {
   // Position card so it stays in viewport
   const cardStyle: React.CSSProperties = {
     position: "absolute",
-    left: x + 20,
-    top: y - 60,
+    left: clamp(
+      x + 20,
+      CARD_PADDING,
+      Math.max(CARD_PADDING, sceneWidth - CARD_WIDTH - CARD_PADDING),
+    ),
+    top: clamp(
+      y - 60,
+      CARD_PADDING,
+      Math.max(CARD_PADDING, sceneHeight - CARD_HEIGHT - CARD_PADDING),
+    ),
     zIndex: 100,
   };
 

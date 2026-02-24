@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
+import { MapControls } from "three/examples/jsm/controls/MapControls.js";
 import type { ShipData } from "../types/ais";
 import { getShipCategory, NY_HARBOR_BOUNDS } from "../types/ais";
 import { ShipInfoCard } from "./ShipInfoCard";
@@ -31,14 +32,30 @@ const TILE_VARIANTS = 4;
 const LAND_BASE_HEIGHT = 12;
 
 interface ShipMarkerData {
+  isShipMarker: true;
   mmsi: number;
   ship: ShipData;
   target: THREE.Vector3;
   wake: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  baseColor: THREE.Color;
 }
+
+type ShipMesh = THREE.Mesh<THREE.ConeGeometry, THREE.MeshStandardMaterial>;
 
 function getShipMarkerData(mesh: THREE.Object3D): ShipMarkerData {
   return mesh.userData as ShipMarkerData;
+}
+
+function getShipMarkerFromObject(object: THREE.Object3D | null): ShipMesh | null {
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    const data = current.userData as Partial<ShipMarkerData>;
+    if (data.isShipMarker === true) {
+      return current as ShipMesh;
+    }
+    current = current.parent;
+  }
+  return null;
 }
 
 function latLonToWorld(lat: number, lon: number): THREE.Vector3 {
@@ -53,7 +70,9 @@ function latLonToWorld(lat: number, lon: number): THREE.Vector3 {
 
 function lonLatToWorld2(lon: number, lat: number): THREE.Vector2 {
   const world = latLonToWorld(lat, lon);
-  return new THREE.Vector2(world.x, world.z);
+  // ShapeGeometry/ExtrudeGeometry are built in XY and later rotated into XZ,
+  // so invert here to keep north/south aligned with ship world coordinates.
+  return new THREE.Vector2(world.x, -world.z);
 }
 
 interface GeoJsonFeatureCollection {
@@ -174,17 +193,14 @@ export function HarborScene({ ships }: HarborSceneProps) {
   const sceneInstanceRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const controlsRef = useRef<MapControls | null>(null);
   const raycasterRef = useRef(new THREE.Raycaster());
   const pointerRef = useRef(new THREE.Vector2());
+  const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
+  const hoveredShipRef = useRef<ShipMesh | null>(null);
   const animationRef = useRef<number | null>(null);
-  const shipMarkersRef = useRef<
-    Map<number, THREE.Mesh<THREE.ConeGeometry, THREE.MeshStandardMaterial>>
-  >(new Map());
+  const shipMarkersRef = useRef<Map<number, ShipMesh>>(new Map());
   const tileRef = useRef<THREE.Mesh[]>([]);
-  const cameraTargetRef = useRef(new THREE.Vector3(0, 0, 0));
-  const cameraFocusOffsetRef = useRef(new THREE.Vector3(0, 420, 430));
-  const modeRef = useRef<"overview" | "focus">("overview");
-  const focusedShipRef = useRef<number | null>(null);
   const [selectedShip, setSelectedShip] = useState<{
     ship: ShipData;
     x: number;
@@ -215,8 +231,6 @@ export function HarborScene({ ships }: HarborSceneProps) {
   );
 
   const handleClose = useCallback(() => {
-    modeRef.current = "overview";
-    focusedShipRef.current = null;
     setSelectedShip(null);
   }, []);
 
@@ -237,7 +251,7 @@ export function HarborScene({ ships }: HarborSceneProps) {
       1,
       5000,
     );
-    camera.position.set(0, 630, 760);
+    camera.position.set(0, 805, -570);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
@@ -248,6 +262,20 @@ export function HarborScene({ ships }: HarborSceneProps) {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     mount.appendChild(renderer.domElement);
     rendererRef.current = renderer;
+
+    const controls = new MapControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.enableRotate = false;
+    controls.screenSpacePanning = true;
+    controls.zoomSpeed = 0.9;
+    controls.panSpeed = 1.0;
+    controls.minDistance = 80;
+    controls.maxDistance = 2200;
+    controls.maxPolarAngle = Math.PI / 2.2;
+    controls.target.set(0, 0, 0);
+    controls.update();
+    controlsRef.current = controls;
 
     const hemiLight = new THREE.HemisphereLight("#d9eef8", "#4f6e88", 0.85);
     hemiLight.position.set(0, 600, 0);
@@ -304,37 +332,87 @@ export function HarborScene({ ships }: HarborSceneProps) {
       if (!rendererRef.current || !cameraRef.current || !sceneRef.current) return;
       const width = sceneRef.current.clientWidth;
       const height = sceneRef.current.clientHeight;
+      if (width === 0 || height === 0) return;
       cameraRef.current.aspect = width / height;
       cameraRef.current.updateProjectionMatrix();
       rendererRef.current.setSize(width, height);
     };
+    const resizeObserver = new ResizeObserver(() => {
+      handleResize();
+    });
+    resizeObserver.observe(mount);
+    requestAnimationFrame(() => handleResize());
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (!sceneRef.current || !cameraRef.current || !rendererRef.current) return;
+      pointerDownRef.current = { x: event.clientX, y: event.clientY };
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!sceneRef.current || !cameraRef.current) return;
       const rect = sceneRef.current.getBoundingClientRect();
       pointerRef.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       pointerRef.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
       raycasterRef.current.setFromCamera(pointerRef.current, cameraRef.current);
 
       const markers = Array.from(shipMarkers.values());
-      const hits = raycasterRef.current.intersectObjects(markers, false);
+      const hits = raycasterRef.current.intersectObjects(markers, true);
+      const hoveredMarker = hits.length > 0 ? getShipMarkerFromObject(hits[0].object) : null;
+      const prevHovered = hoveredShipRef.current;
+
+      if (prevHovered && prevHovered !== hoveredMarker) {
+        const prevData = getShipMarkerData(prevHovered);
+        prevHovered.material.color.copy(prevData.baseColor);
+      }
+
+      if (hoveredMarker) {
+        const hoveredData = getShipMarkerData(hoveredMarker);
+        const hoverColor = hoveredData.baseColor.clone().offsetHSL(0, 0.12, 0.16);
+        hoveredMarker.material.color.copy(hoverColor);
+        mount.style.cursor = "pointer";
+      } else {
+        mount.style.cursor = "grab";
+      }
+
+      hoveredShipRef.current = hoveredMarker;
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      if (!sceneRef.current || !cameraRef.current || !rendererRef.current) return;
+      const down = pointerDownRef.current;
+      pointerDownRef.current = null;
+      if (!down) return;
+      const moved = Math.hypot(event.clientX - down.x, event.clientY - down.y);
+      if (moved > 6) return;
+
+      const rect = sceneRef.current.getBoundingClientRect();
+      pointerRef.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointerRef.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycasterRef.current.setFromCamera(pointerRef.current, cameraRef.current);
+
+      const markers = Array.from(shipMarkers.values());
+      const hits = raycasterRef.current.intersectObjects(markers, true);
       if (hits.length === 0) {
         handleClose();
         return;
       }
 
-      const marker = hits[0].object as THREE.Mesh<
-        THREE.ConeGeometry,
-        THREE.MeshStandardMaterial
-      >;
+      const marker = getShipMarkerFromObject(hits[0].object);
+      if (!marker) {
+        handleClose();
+        return;
+      }
       const focusedShip = getShipMarkerData(marker).ship;
-      modeRef.current = "focus";
-      focusedShipRef.current = focusedShip.mmsi;
+      controls.target.copy(marker.position);
+      camera.position.lerp(marker.position.clone().add(new THREE.Vector3(0, 203, -142)), 0.75);
+      controls.update();
       handleShipClick(focusedShip, marker.position);
     };
 
     window.addEventListener("resize", handleResize);
     mount.addEventListener("pointerdown", handlePointerDown);
+    mount.addEventListener("pointermove", handlePointerMove);
+    mount.addEventListener("pointerup", handlePointerUp);
+    mount.style.cursor = "grab";
 
     const animate = (time: number) => {
       if (!sceneInstanceRef.current || !cameraRef.current || !rendererRef.current) return;
@@ -361,20 +439,7 @@ export function HarborScene({ ships }: HarborSceneProps) {
         wake.material.opacity = 0.25 + Math.min(markerData.ship.sog / 45, 0.25);
       }
 
-      if (modeRef.current === "focus" && focusedShipRef.current != null) {
-        const focused = shipMarkers.get(focusedShipRef.current);
-        if (focused) {
-          cameraTargetRef.current.lerp(focused.position, 0.08);
-          cameraFocusOffsetRef.current.lerp(new THREE.Vector3(0, 160, 190), 0.1);
-        }
-      } else {
-        cameraTargetRef.current.lerp(new THREE.Vector3(0, 0, 0), 0.06);
-        cameraFocusOffsetRef.current.lerp(new THREE.Vector3(0, 420, 430), 0.08);
-      }
-
-      const desiredCameraPos = cameraTargetRef.current.clone().add(cameraFocusOffsetRef.current);
-      cameraRef.current.position.lerp(desiredCameraPos, 0.1);
-      cameraRef.current.lookAt(cameraTargetRef.current);
+      controls.update();
 
       rendererRef.current.render(sceneInstanceRef.current, cameraRef.current);
       animationRef.current = requestAnimationFrame(animate);
@@ -384,10 +449,22 @@ export function HarborScene({ ships }: HarborSceneProps) {
 
     return () => {
       window.removeEventListener("resize", handleResize);
+      resizeObserver.disconnect();
       mount.removeEventListener("pointerdown", handlePointerDown);
+      mount.removeEventListener("pointermove", handlePointerMove);
+      mount.removeEventListener("pointerup", handlePointerUp);
       if (animationRef.current != null) {
         cancelAnimationFrame(animationRef.current);
       }
+      mount.style.cursor = "";
+      const hovered = hoveredShipRef.current;
+      if (hovered) {
+        const data = getShipMarkerData(hovered);
+        hovered.material.color.copy(data.baseColor);
+        hoveredShipRef.current = null;
+      }
+      controls.dispose();
+      controlsRef.current = null;
       renderer.dispose();
       if (mount.contains(renderer.domElement)) {
         mount.removeChild(renderer.domElement);
@@ -419,7 +496,7 @@ export function HarborScene({ ships }: HarborSceneProps) {
       }
 
       const hull = new THREE.Mesh(
-        new THREE.ConeGeometry(8 * CATEGORY_SCALES[category], 30 * CATEGORY_SCALES[category], 8),
+        new THREE.ConeGeometry(4.5 * CATEGORY_SCALES[category], 16 * CATEGORY_SCALES[category], 8),
         new THREE.MeshStandardMaterial({
           color: CATEGORY_COLORS[category],
           roughness: 0.55,
@@ -443,11 +520,23 @@ export function HarborScene({ ships }: HarborSceneProps) {
       wake.position.set(0, -8, -16);
       hull.add(wake);
 
+      const hitArea = new THREE.Mesh(
+        new THREE.SphereGeometry(13 * CATEGORY_SCALES[category], 12, 12),
+        new THREE.MeshBasicMaterial({
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+        }),
+      );
+      hull.add(hitArea);
+
       hull.userData = {
+        isShipMarker: true,
         mmsi,
         ship,
         target,
         wake,
+        baseColor: new THREE.Color(CATEGORY_COLORS[category]),
       } as ShipMarkerData;
 
       scene.add(hull);
@@ -457,8 +546,20 @@ export function HarborScene({ ships }: HarborSceneProps) {
     for (const [mmsi, marker] of shipMarkersRef.current.entries()) {
       if (nextShipIds.has(mmsi)) continue;
       scene.remove(marker);
-      marker.geometry.dispose();
-      (marker.material as THREE.Material).dispose();
+      if (hoveredShipRef.current === marker) {
+        hoveredShipRef.current = null;
+      }
+      marker.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return;
+        child.geometry.dispose();
+        if (Array.isArray(child.material)) {
+          for (const material of child.material) {
+            material.dispose();
+          }
+          return;
+        }
+        child.material.dispose();
+      });
       shipMarkersRef.current.delete(mmsi);
     }
   }, [ships]);

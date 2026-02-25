@@ -4,6 +4,7 @@ import { MapControls } from "three/examples/jsm/controls/MapControls.js";
 import type { ShipData } from "../types/ais";
 import type { HarborEnvironment } from "../types/environment";
 import { ShipInfoCard } from "./ShipInfoCard";
+import { FerryRouteInfoCard } from "./FerryRouteInfoCard";
 
 // Scene layer modules
 import {
@@ -22,7 +23,15 @@ import { reconcileShips, animateShips } from "../scene/ships";
 import { createWindParticles, animateAtmosphere, disposeWindParticles } from "../scene/atmosphere";
 import { HARBOR_LABELS, projectLabels } from "../scene/labels";
 import { createSkyBackdrop, animateSky, disposeSkyBackdrop } from "../scene/sky";
-import { loadFerryRoutes, setFerryRouteNight, disposeFerryRoutes } from "../scene/ferryRoutes";
+import {
+  loadFerryRoutes,
+  setFerryRouteNight,
+  disposeFerryRoutes,
+  getFerryRouteTargets,
+  getFerryRouteFromObject,
+  getFerryRouteData,
+  type FerryRouteInfo,
+} from "../scene/ferryRoutes";
 
 interface HarborSceneProps {
   ships: Map<number, ShipData>;
@@ -39,8 +48,10 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
   const pointerRef = useRef(new THREE.Vector2());
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
   const hoveredShipRef = useRef<ShipMesh | null>(null);
+  const hoveredFerryRef = useRef<THREE.Line | null>(null);
   const animationRef = useRef<number | null>(null);
   const shipMarkersRef = useRef<Map<number, ShipMesh>>(new Map());
+  const ferryRouteTargetsRef = useRef<THREE.Line[]>([]);
   const tileRef = useRef<WaterTile[]>([]);
   const windParticlesRef = useRef<THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> | null>(null);
   const coastlineObjectsRef = useRef<THREE.Object3D[]>([]);
@@ -59,6 +70,13 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     sceneWidth: number;
     sceneHeight: number;
   } | null>(null);
+  const [selectedFerryRoute, setSelectedFerryRoute] = useState<{
+    route: FerryRouteInfo;
+    x: number;
+    y: number;
+    sceneWidth: number;
+    sceneHeight: number;
+  } | null>(null);
 
   const handleShipClick = useCallback(
     (ship: ShipData, worldPos: THREE.Vector3) => {
@@ -68,12 +86,30 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       const projected = worldPos.clone().project(camera);
       const x = ((projected.x + 1) * 0.5) * sceneRect.width;
       const y = ((-projected.y + 1) * 0.5) * sceneRect.height;
+      setSelectedFerryRoute(null);
       setSelectedShip({ ship, x, y, sceneWidth: sceneRect.width, sceneHeight: sceneRect.height });
     },
     [],
   );
 
-  const handleClose = useCallback(() => setSelectedShip(null), []);
+  const handleFerryRouteClick = useCallback(
+    (route: FerryRouteInfo, worldPos: THREE.Vector3) => {
+      const sceneRect = sceneRef.current?.getBoundingClientRect();
+      const camera = cameraRef.current;
+      if (!sceneRect || !camera) return;
+      const projected = worldPos.clone().project(camera);
+      const x = ((projected.x + 1) * 0.5) * sceneRect.width;
+      const y = ((-projected.y + 1) * 0.5) * sceneRect.height;
+      setSelectedShip(null);
+      setSelectedFerryRoute({ route, x, y, sceneWidth: sceneRect.width, sceneHeight: sceneRect.height });
+    },
+    [],
+  );
+
+  const handleClose = useCallback(() => {
+    setSelectedShip(null);
+    setSelectedFerryRoute(null);
+  }, []);
 
   useEffect(() => {
     environmentRef.current = environment;
@@ -85,12 +121,14 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     const mount = sceneRef.current;
     if (!mount) return;
     const shipMarkers = shipMarkersRef.current;
+    const ferryRouteTargets = ferryRouteTargetsRef.current;
     const tiles = tileRef.current;
     const coastlineObjects = coastlineObjectsRef.current;
     const raycastTargets = raycastTargetsRef.current;
     const labelSizes = labelSizesRef.current;
     const abortController = new AbortController();
     landPolygonRings.length = 0;
+    raycasterRef.current.params.Line = { threshold: 8 };
 
     // Scene
     const scene = new THREE.Scene();
@@ -155,10 +193,15 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     const newTiles = createWaterTiles(scene);
     tiles.push(...newTiles);
 
-    if (RENDER_LAND_POLYGONS) {
-      void loadLandPolygons(scene, abortController.signal);
-    }
-    void loadFerryRoutes(scene, abortController.signal);
+    void (async () => {
+      if (RENDER_LAND_POLYGONS) {
+        await loadLandPolygons(scene, abortController.signal);
+      }
+      if (abortController.signal.aborted) return;
+      await loadFerryRoutes(scene, abortController.signal);
+      ferryRouteTargets.length = 0;
+      ferryRouteTargets.push(...getFerryRouteTargets());
+    })();
 
     // Resize
     const handleResize = () => {
@@ -179,6 +222,13 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       pointerDownRef.current = { x: event.clientX, y: event.clientY };
     };
 
+    const setFerryLineColor = (line: THREE.Line, color: THREE.Color) => {
+      const material = line.material;
+      if (!Array.isArray(material)) {
+        (material as THREE.LineDashedMaterial).color.copy(color);
+      }
+    };
+
     const handlePointerMove = (event: PointerEvent) => {
       if (!sceneRef.current || !cameraRef.current) return;
       const rect = sceneRef.current.getBoundingClientRect();
@@ -191,17 +241,36 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       const hits = raycasterRef.current.intersectObjects(raycastTargets, true);
       const hoveredMarker = hits.length > 0 ? getShipMarkerFromObject(hits[0].object) : null;
       const prevHovered = hoveredShipRef.current;
+      const prevHoveredFerry = hoveredFerryRef.current;
 
       if (prevHovered && prevHovered !== hoveredMarker) {
         const prevData = getShipMarkerData(prevHovered);
         prevHovered.material.color.copy(prevData.baseColor);
       }
       if (hoveredMarker) {
+        if (prevHoveredFerry) {
+          const routeData = getFerryRouteData(prevHoveredFerry);
+          setFerryLineColor(prevHoveredFerry, routeData.baseColor);
+          hoveredFerryRef.current = null;
+        }
         const hoveredData = getShipMarkerData(hoveredMarker);
         hoveredMarker.material.color.copy(hoveredData.baseColor.clone().offsetHSL(0, 0.12, 0.16));
         mount.style.cursor = "pointer";
       } else {
-        mount.style.cursor = "grab";
+        const ferryHits = raycasterRef.current.intersectObjects(ferryRouteTargets, true);
+        const hoveredFerry = ferryHits.length > 0 ? getFerryRouteFromObject(ferryHits[0].object) : null;
+        if (prevHoveredFerry && prevHoveredFerry !== hoveredFerry) {
+          const routeData = getFerryRouteData(prevHoveredFerry);
+          setFerryLineColor(prevHoveredFerry, routeData.baseColor);
+        }
+        if (hoveredFerry) {
+          const routeData = getFerryRouteData(hoveredFerry);
+          setFerryLineColor(hoveredFerry, routeData.hoverColor);
+          mount.style.cursor = "pointer";
+        } else {
+          mount.style.cursor = "grab";
+        }
+        hoveredFerryRef.current = hoveredFerry;
       }
       hoveredShipRef.current = hoveredMarker;
     };
@@ -221,15 +290,28 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       raycastTargets.length = 0;
       for (const marker of shipMarkers.values()) raycastTargets.push(marker);
       const hits = raycasterRef.current.intersectObjects(raycastTargets, true);
-      if (hits.length === 0) { handleClose(); return; }
+      const marker = hits.length > 0 ? getShipMarkerFromObject(hits[0].object) : null;
+      if (marker) {
+        const focusedShip = getShipMarkerData(marker).ship;
+        controls.target.copy(marker.position);
+        camera.position.lerp(marker.position.clone().add(new THREE.Vector3(0, 203, -142)), 0.75);
+        controls.update();
+        handleShipClick(focusedShip, marker.position);
+        return;
+      }
 
-      const marker = getShipMarkerFromObject(hits[0].object);
-      if (!marker) { handleClose(); return; }
-      const focusedShip = getShipMarkerData(marker).ship;
-      controls.target.copy(marker.position);
-      camera.position.lerp(marker.position.clone().add(new THREE.Vector3(0, 203, -142)), 0.75);
-      controls.update();
-      handleShipClick(focusedShip, marker.position);
+      const ferryHits = raycasterRef.current.intersectObjects(ferryRouteTargets, true);
+      if (ferryHits.length === 0) {
+        handleClose();
+        return;
+      }
+      const routeLine = getFerryRouteFromObject(ferryHits[0].object);
+      if (!routeLine) {
+        handleClose();
+        return;
+      }
+      const routeData = getFerryRouteData(routeLine);
+      handleFerryRouteClick(routeData.info, ferryHits[0].point.clone());
     };
 
     window.addEventListener("resize", handleResize);
@@ -293,6 +375,12 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         hovered.material.color.copy(getShipMarkerData(hovered).baseColor);
         hoveredShipRef.current = null;
       }
+      const hoveredRoute = hoveredFerryRef.current;
+      if (hoveredRoute) {
+        const routeData = getFerryRouteData(hoveredRoute);
+        setFerryLineColor(hoveredRoute, routeData.baseColor);
+        hoveredFerryRef.current = null;
+      }
       controls.dispose();
       controlsRef.current = null;
       disposeWindParticles(windParticlesRef.current);
@@ -305,6 +393,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
       shipMarkers.clear();
       raycastTargets.length = 0;
+      ferryRouteTargets.length = 0;
       labelSizes.clear();
       disposeFerryRoutes(scene);
       disposeWaterTiles(scene, tiles);
@@ -316,7 +405,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       abortController.abort();
       landPolygonRings.length = 0;
     };
-  }, [handleClose, handleShipClick]);
+  }, [handleClose, handleShipClick, handleFerryRouteClick]);
 
   /* ── Ship Reconciliation ───────────────────────────────────────────── */
 
@@ -346,7 +435,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         ))}
       </div>
       <div className="harbor-scene-overlay">
-        Drag to pan, scroll to zoom, hover to inspect vessels.
+        Drag to pan, scroll to zoom, hover to inspect vessels and ferry routes.
       </div>
       {selectedShip && (
         <ShipInfoCard
@@ -355,6 +444,16 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
           y={selectedShip.y}
           sceneWidth={selectedShip.sceneWidth}
           sceneHeight={selectedShip.sceneHeight}
+          onClose={handleClose}
+        />
+      )}
+      {selectedFerryRoute && (
+        <FerryRouteInfoCard
+          route={selectedFerryRoute.route}
+          x={selectedFerryRoute.x}
+          y={selectedFerryRoute.y}
+          sceneWidth={selectedFerryRoute.sceneWidth}
+          sceneHeight={selectedFerryRoute.sceneHeight}
           onClose={handleClose}
         />
       )}

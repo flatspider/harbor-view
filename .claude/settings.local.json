@@ -16,7 +16,22 @@
       "Bash(bun:*)",
       "Bash(git show:*)",
       "Bash(cp:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(docker run:*)",
+      "Bash(sleep 3 && curl -s http://localhost:8080/api/health | python3 -m json.tool 2>&1)",
+      "Bash(docker stop harbor-watch-test && docker rm harbor-watch-test 2>&1)",
+      "Bash(aws sts:*)",
+      "Bash(aws ecr:*)",
+      "Bash(aws iam:*)",
+      "Bash(aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 295234319444.dkr.ecr.us-east-1.amazonaws.com 2>&1)",
+      "Bash(docker tag harbor-watch:latest 295234319444.dkr.ecr.us-east-1.amazonaws.com/harbor-watch:latest && docker push 295234319444.dkr.ecr.us-east-1.amazonaws.com/harbor-watch:latest 2>&1)",
+      "Bash(aws apprunner:*)",
+      "Bash(aws ec2:*)",
+      "Bash(SG=sg-02e37fa4611312e20 && \\\\\naws ec2 authorize-security-group-ingress --group-id $SG --protocol tcp --port 22 --cidr 0.0.0.0/0 --region us-east-1 2>&1 && \\\\\naws ec2 authorize-security-group-ingress --group-id $SG --protocol tcp --port 80 --cidr 0.0.0.0/0 --region us-east-1 2>&1 && \\\\\naws ec2 authorize-security-group-ingress --group-id $SG --protocol tcp --port 443 --cidr 0.0.0.0/0 --region us-east-1 2>&1)",
+      "Bash(sleep 60 && curl -s --connect-timeout 5 --max-time 10 http://35.172.150.216/api/health 2>&1)",
+      "Bash(ssh:*)",
+      "Bash(docker build:*)",
+      "Bash(sleep 5 && curl -s --connect-timeout 5 --max-time 10 http://35.172.150.216/api/health 2>&1)"
     ]
   }
 }

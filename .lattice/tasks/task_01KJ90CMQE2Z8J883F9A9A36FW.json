@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-24T23:40:13Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-24T23:41:34Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJ90EV4T417EGSCXQ8C51A03",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJ90CMQE2Z8J883F9A9A36FW",
+  "last_event_id": "ev_01KJ90F33S5R47JKB2T1T5FXEJ",
+  "last_status_changed_at": "2026-02-24T23:41:34Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-46",
+  "status": "done",
+  "tags": null,
+  "title": "Generate NJ polygons and merge with restored NYC land",
+  "type": "task",
+  "updated_at": "2026-02-24T23:41:34Z",
+  "urgency": null
+}

@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-24T22:56:01Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-24T22:56:33Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJ8XWJ338K5PYDX7JS47DJ77",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJ8XVPPYGRHD76VGVTS3QCT3",
+  "last_event_id": "ev_01KJ8XWNBCD4Q4XGG2BV9QWV1W",
+  "last_status_changed_at": "2026-02-24T22:56:33Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-39",
+  "status": "done",
+  "tags": null,
+  "title": "Color shoreline/land outline brown",
+  "type": "task",
+  "updated_at": "2026-02-24T22:56:33Z",
+  "urgency": null
+}

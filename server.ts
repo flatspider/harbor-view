@@ -208,6 +208,8 @@ function ingestAisMessage(data: AISMessage) {
       shipType: existing?.shipType ?? 0,
       destination: existing?.destination ?? "",
       callSign: existing?.callSign ?? "",
+      lengthM: existing?.lengthM ?? 0,
+      beamM: existing?.beamM ?? 0,
       lastUpdate: now,
       lastPositionUpdate: now,
     });
@@ -231,6 +233,8 @@ function ingestAisMessage(data: AISMessage) {
       shipType: staticData.Type,
       destination: staticData.Destination,
       callSign: staticData.CallSign,
+      lengthM: staticData.Dimension.A + staticData.Dimension.B,
+      beamM: staticData.Dimension.C + staticData.Dimension.D,
       lastUpdate: now,
       lastPositionUpdate: existing?.lastPositionUpdate ?? now,
     });
@@ -353,7 +357,7 @@ async function getOpenMeteoSnapshot(): Promise<IntegrationSnapshot> {
     const url =
       "https://marine-api.open-meteo.com/v1/marine" +
       `?latitude=${NY_HARBOR_POINT.lat}&longitude=${NY_HARBOR_POINT.lon}` +
-      "&current=wave_height,swell_wave_height,swell_wave_period,sea_surface_temperature";
+      "&current=wave_height,swell_wave_height,swell_wave_period,swell_wave_direction,sea_surface_temperature";
 
     const raw = await fetchJson(url);
     const record = ensureRecord(raw);
@@ -363,6 +367,7 @@ async function getOpenMeteoSnapshot(): Promise<IntegrationSnapshot> {
       waveHeightM: asNumber(current?.wave_height),
       swellHeightM: asNumber(current?.swell_wave_height),
       swellPeriodS: asNumber(current?.swell_wave_period),
+      swellDirectionDeg: asNumber(current?.swell_wave_direction),
       seaSurfaceTempC: asNumber(current?.sea_surface_temperature),
       currentTime: asString(current?.time),
     });

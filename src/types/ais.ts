@@ -73,6 +73,8 @@ export interface ShipData {
   shipType: number;
   destination: string;
   callSign: string;
+  lengthM: number;
+  beamM: number;
   lastUpdate: number; // timestamp ms
   lastPositionUpdate: number; // timestamp ms for interpolation
 }

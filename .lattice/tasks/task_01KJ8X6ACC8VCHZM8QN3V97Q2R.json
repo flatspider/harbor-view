@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-24T22:44:21Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-24T22:47:36Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJ8XC63MPNZ2K99JN9SK217M",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJ8X6ACC8VCHZM8QN3V97Q2R",
+  "last_event_id": "ev_01KJ8XC8VV7EM2ZAB1B072G7CV",
+  "last_status_changed_at": "2026-02-24T22:47:36Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-37",
+  "status": "done",
+  "tags": null,
+  "title": "Use NOAA shapefile as harbor shoreline source",
+  "type": "task",
+  "updated_at": "2026-02-24T22:47:36Z",
+  "urgency": null
+}

@@ -2,21 +2,19 @@ import { useShipData } from "./hooks/useShipData";
 import { useIntegrations } from "./hooks/useIntegrations";
 import { HarborScene } from "./components/HarborScene";
 import { StatusBar } from "./components/StatusBar";
-import { IntegrationsPanel } from "./components/IntegrationsPanel";
+import { ConditionsStrip } from "./components/ConditionsStrip";
+import { toHarborEnvironment } from "./types/environment";
 
 function App() {
   const { ships, connectionStatus, shipCount } = useShipData();
-  const { sources, updatedAt, isLoading } = useIntegrations();
+  const { sources } = useIntegrations();
+  const environment = toHarborEnvironment(sources);
 
   return (
     <>
       <StatusBar shipCount={shipCount} connectionStatus={connectionStatus} />
-      <IntegrationsPanel
-        sources={sources}
-        updatedAt={updatedAt}
-        isLoading={isLoading}
-      />
-      <HarborScene ships={ships} />
+      <ConditionsStrip environment={environment} />
+      <HarborScene ships={ships} environment={environment} />
     </>
   );
 }

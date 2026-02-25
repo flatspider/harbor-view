@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-24T23:26:13Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-24T23:27:24Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJ8ZMR5ZFE1KP2596KKHQBP4",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJ8ZK03XPQBEG8V478MC1C0X",
+  "last_event_id": "ev_01KJ8ZN54KK7B7WXJ1CQ3VH2QB",
+  "last_status_changed_at": "2026-02-24T23:27:24Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-43",
+  "status": "done",
+  "tags": null,
+  "title": "Build harbor land polygons from NJ + evening NYC shoreline",
+  "type": "task",
+  "updated_at": "2026-02-24T23:27:24Z",
+  "urgency": null
+}

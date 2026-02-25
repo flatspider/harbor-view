@@ -3,7 +3,20 @@
     "allow": [
       "Bash(lattice list:*)",
       "Bash(lattice create:*)",
-      "Bash(lattice status:*)"
+      "Bash(lattice status:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "WebSearch",
+      "WebFetch(domain:njogis-newjersey.opendata.arcgis.com)",
+      "WebFetch(domain:eric.clst.org)",
+      "Bash(head:*)",
+      "Bash(python3:*)",
+      "Bash(tail:*)",
+      "WebFetch(domain:osmdata.openstreetmap.de)",
+      "Bash(bun:*)",
+      "Bash(git show:*)",
+      "Bash(cp:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

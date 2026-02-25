@@ -64,10 +64,40 @@ const CATEGORY_STYLES: Record<ShipCategory, ShipCategoryStyle> = {
   },
 };
 
-const WORLD_WIDTH = 1800;
-const WORLD_DEPTH = 1200;
 const TILE_SIZE = 120;
 const TILE_VARIANTS = 4;
+const EARTH_RADIUS_KM = 6371;
+const DEG_TO_RAD = Math.PI / 180;
+const WORLD_UNITS_PER_KM = 36;
+
+function estimateNorthSouthDistanceKm(southLat: number, northLat: number): number {
+  const deltaLat = Math.abs(northLat - southLat) * DEG_TO_RAD;
+  return EARTH_RADIUS_KM * deltaLat;
+}
+
+function estimateEastWestDistanceKm(westLon: number, eastLon: number, midLat: number): number {
+  const deltaLon = Math.abs(eastLon - westLon) * DEG_TO_RAD;
+  return EARTH_RADIUS_KM * Math.cos(midLat * DEG_TO_RAD) * deltaLon;
+}
+
+const GEO_NORTH_SOUTH_KM = estimateNorthSouthDistanceKm(
+  NY_HARBOR_BOUNDS.south,
+  NY_HARBOR_BOUNDS.north,
+);
+const GEO_EAST_WEST_KM = estimateEastWestDistanceKm(
+  NY_HARBOR_BOUNDS.west,
+  NY_HARBOR_BOUNDS.east,
+  (NY_HARBOR_BOUNDS.south + NY_HARBOR_BOUNDS.north) * 0.5,
+);
+
+const WORLD_DEPTH = Math.max(
+  TILE_SIZE,
+  Math.round((GEO_NORTH_SOUTH_KM * WORLD_UNITS_PER_KM) / TILE_SIZE) * TILE_SIZE,
+);
+const WORLD_WIDTH = Math.max(
+  TILE_SIZE,
+  Math.round((GEO_EAST_WEST_KM * WORLD_UNITS_PER_KM) / TILE_SIZE) * TILE_SIZE,
+);
 const LAND_BASE_HEIGHT = 12;
 const RENDER_LAND_POLYGONS = true;
 const SHIP_BASE_Y = 10;
@@ -77,9 +107,35 @@ const SHIP_COLLISION_PADDING = 8;
 const SHIP_PLACEMENT_STEP = 12;
 const SHIP_PLACEMENT_MAX_RADIUS = 300;
 
+interface LandRingRecord {
+  ring: number[][];
+  minLon: number;
+  maxLon: number;
+  minLat: number;
+  maxLat: number;
+}
+
 // Stored land polygon outer rings (lon/lat) for point-in-polygon ship culling.
 // Populated when GeoJSON loads; checked before placing ship markers.
-const landPolygonRings: number[][][] = [];
+const landPolygonRings: LandRingRecord[] = [];
+
+const PERF_DEBUG =
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).has("perf");
+
+function createLandRingRecord(ring: number[][]): LandRingRecord {
+  let minLon = Infinity;
+  let maxLon = -Infinity;
+  let minLat = Infinity;
+  let maxLat = -Infinity;
+  for (const [lon, lat] of ring) {
+    if (lon < minLon) minLon = lon;
+    if (lon > maxLon) maxLon = lon;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  }
+  return { ring, minLon, maxLon, minLat, maxLat };
+}
 
 function pointInRing(lon: number, lat: number, ring: number[][]): boolean {
   let inside = false;
@@ -94,8 +150,9 @@ function pointInRing(lon: number, lat: number, ring: number[][]): boolean {
 }
 
 function isPointOnLand(lon: number, lat: number): boolean {
-  for (const ring of landPolygonRings) {
-    if (pointInRing(lon, lat, ring)) return true;
+  for (const record of landPolygonRings) {
+    if (lon < record.minLon || lon > record.maxLon || lat < record.minLat || lat > record.maxLat) continue;
+    if (pointInRing(lon, lat, record.ring)) return true;
   }
   return false;
 }
@@ -385,7 +442,7 @@ function addGeoJsonLand(scene: THREE.Scene, data: GeoJsonFeatureCollection): boo
     const { geometry } = feature;
     if (geometry.type === "Polygon") {
       // Store outer ring for ship-on-land culling
-      if (geometry.coordinates[0]?.length >= 3) landPolygonRings.push(geometry.coordinates[0]);
+      if (geometry.coordinates[0]?.length >= 3) landPolygonRings.push(createLandRingRecord(geometry.coordinates[0]));
 
       const shape = polygonRingsToShape(geometry.coordinates);
       if (!shape) continue;
@@ -405,7 +462,7 @@ function addGeoJsonLand(scene: THREE.Scene, data: GeoJsonFeatureCollection): boo
 
     for (const poly of geometry.coordinates) {
       // Store outer ring for ship-on-land culling
-      if (poly[0]?.length >= 3) landPolygonRings.push(poly[0]);
+      if (poly[0]?.length >= 3) landPolygonRings.push(createLandRingRecord(poly[0]));
 
       const shape = polygonRingsToShape(poly);
       if (!shape) continue;
@@ -499,12 +556,13 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     sceneInstanceRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(
-      45,
+      40,
       mount.clientWidth / mount.clientHeight,
       1,
       5000,
     );
-    camera.position.set(0, 805, -570);
+    const worldMaxSpan = Math.max(WORLD_WIDTH, WORLD_DEPTH);
+    camera.position.set(0, WORLD_DEPTH * 0.67, -WORLD_DEPTH * 0.475);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
@@ -524,7 +582,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     controls.zoomSpeed = 0.9;
     controls.panSpeed = 1.0;
     controls.minDistance = 80;
-    controls.maxDistance = 2200;
+    controls.maxDistance = worldMaxSpan * 1.85;
     controls.maxPolarAngle = Math.PI / 2.2;
     controls.target.set(0, 0, 0);
     controls.update();
@@ -932,6 +990,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
   useEffect(() => {
     const scene = sceneInstanceRef.current;
     if (!scene) return;
+    const shipsEffectStart = performance.now();
 
     const nextShipIds = new Set<number>();
     const occupiedSlots: OccupiedSlot[] = [];
@@ -946,7 +1005,6 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       const style = CATEGORY_STYLES[category];
       const baseTarget = latLonToWorld(ship.lat, ship.lon);
       const radius = getShipCollisionRadius(ship, style);
-      const resolvedTarget = resolveShipTarget(baseTarget, mmsi, radius, occupiedSlots);
       const existing = shipMarkersRef.current.get(mmsi);
       const dimensionFactor = Math.min(
         Math.max((ship.lengthM > 0 ? ship.lengthM / 180 : 0.8) + (ship.beamM > 0 ? ship.beamM / 70 : 0.3), 0.75),
@@ -958,7 +1016,9 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         const markerData = getShipMarkerData(existing);
         markerData.ship = ship;
         markerData.radius = radius;
-        const nextTarget = resolvedTarget ?? markerData.target;
+        // Re-run expensive collision/land placement search only for new markers.
+        // Existing tracks should follow live AIS targets directly unless point is on land.
+        const nextTarget = isPointOnLand(ship.lon, ship.lat) ? markerData.target : baseTarget;
         markerData.target.copy(nextTarget);
 
         const needsGeometryRefresh =
@@ -1000,6 +1060,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         continue;
       }
 
+      const resolvedTarget = resolveShipTarget(baseTarget, mmsi, radius, occupiedSlots);
       if (!resolvedTarget) continue;
 
       const hullGeometry = createShipGeometry(category, nextSizeScale);
@@ -1087,6 +1148,14 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         child.material.dispose();
       });
       shipMarkersRef.current.delete(mmsi);
+    }
+
+    const shipsEffectMs = performance.now() - shipsEffectStart;
+    if (PERF_DEBUG && shipsEffectMs > 16) {
+      console.debug("[perf] ship reconcile", {
+        ms: Number(shipsEffectMs.toFixed(2)),
+        ships: ships.size,
+      });
     }
   }, [ships]);
 

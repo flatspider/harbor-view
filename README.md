@@ -39,6 +39,8 @@ bun run dev
 - `bun run dev:client` - runs Vite only (no AIS relay)
 - `bun run build` - typecheck + build frontend
 - `bun run preview` - production-mode Express server
+- `bun run data:import-noaa-shoreline -- --input /abs/path/N40W075.shp` - convert NOAA shapefile to shoreline GeoJSON
+- `bun run data:build-harbor-land` - rebuild `public/assets/data/nyc-harbor-land.geojson` from shoreline lines
 
 ## Architecture
 

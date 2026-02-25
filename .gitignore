@@ -23,3 +23,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Raw geospatial source data and oversized intermediates
+public/assets/data/Coastline_of_New_Jersey.geojson
+public/assets/data/N40W075/
+public/assets/data/**/*.shp
+public/assets/data/**/*.dbf
+public/assets/data/**/*.shx
+public/assets/data/**/*.prj

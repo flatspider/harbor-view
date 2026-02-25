@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-24T23:37:57Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-24T23:38:37Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJ909E7N5GP74BNWKATGRVBG",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJ908F77G38Q01XMMQEDJD84",
+  "last_event_id": "ev_01KJ909PXRHTDWJB26C6EMX8GP",
+  "last_status_changed_at": "2026-02-24T23:38:37Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-45",
+  "status": "done",
+  "tags": null,
+  "title": "Restore nyc-harbor-land.geojson from commit 230b147",
+  "type": "task",
+  "updated_at": "2026-02-24T23:38:37Z",
+  "urgency": null
+}

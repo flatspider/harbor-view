@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-24T22:53:21Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-24T22:54:31Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJ8XRW9KV80TJZKVAW9RZH1P",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJ8XPSTBGKZENTRY2N8FSZ9B",
+  "last_event_id": "ev_01KJ8XRYWTTGQNX6504478AGAX",
+  "last_status_changed_at": "2026-02-24T22:54:31Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-38",
+  "status": "done",
+  "tags": null,
+  "title": "Render NOAA shoreline lines only (no land polygons)",
+  "type": "task",
+  "updated_at": "2026-02-24T22:54:31Z",
+  "urgency": null
+}

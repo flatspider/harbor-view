@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-24T23:28:37Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-24T23:29:17Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJ8ZRBCZRFBE83XAWKWCFETT",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJ8ZQCJWN6WVFWKM5WSP7VY6",
+  "last_event_id": "ev_01KJ8ZRK7HN7TFWRXQ03M0W49H",
+  "last_status_changed_at": "2026-02-24T23:29:17Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-44",
+  "status": "done",
+  "tags": null,
+  "title": "Promote candidate harbor polygons to active nyc-harbor-land file",
+  "type": "task",
+  "updated_at": "2026-02-24T23:29:17Z",
+  "urgency": null
+}

@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-24T23:12:39Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-24T23:13:09Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJ8YTZY8NZABA6ZEJBRK9F5J",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJ8YT4V2RCHFA4V4K5T3GCFY",
+  "last_event_id": "ev_01KJ8YV2QAHYP1M9BJV427WX98",
+  "last_status_changed_at": "2026-02-24T23:13:09Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-41",
+  "status": "done",
+  "tags": null,
+  "title": "Enable land polygon rendering for harbor preview",
+  "type": "task",
+  "updated_at": "2026-02-24T23:13:09Z",
+  "urgency": null
+}

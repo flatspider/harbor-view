@@ -1,265 +1,206 @@
 import * as THREE from "three";
+import { Water } from "three/examples/jsm/objects/Water.js";
 import type { HarborEnvironment } from "../types/environment";
-import {
-  TILE_SIZE,
-  TILE_VARIANTS,
-  WORLD_WIDTH,
-  WORLD_DEPTH,
-  degToVectorOnWater,
-  type WaterTile,
-} from "./constants";
-
-/* ── GLSL Shaders ────────────────────────────────────────────────────── */
-
-const waterVertexShader = /* glsl */ `
-  uniform float uTime;
-  uniform float uWaveIntensity;
-  uniform float uWaveSpeed;
-  uniform vec2 uSwellDir;
-  uniform float uTideOffset;
-  uniform vec2 uTileOffset;
-
-  varying float vHeight;
-  varying vec2 vWorldPos;
-  varying vec3 vNormal;
-  varying vec3 vViewPosition;
-
-  // Simplex-style noise using sin combinations (GPU-friendly, no texture needed)
-  float hash(vec2 p) {
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-  }
-
-  float noise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f); // smoothstep
-    float a = hash(i);
-    float b = hash(i + vec2(1.0, 0.0));
-    float c = hash(i + vec2(0.0, 1.0));
-    float d = hash(i + vec2(1.0, 1.0));
-    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-  }
-
-  float fbm(vec2 p) {
-    float value = 0.0;
-    float amplitude = 0.5;
-    for (int i = 0; i < 4; i++) {
-      value += amplitude * noise(p);
-      p *= 2.1;
-      amplitude *= 0.48;
-    }
-    return value;
-  }
-
-  void main() {
-    vec3 pos = position;
-    vec2 worldXZ = pos.xy + uTileOffset;
-    vWorldPos = worldXZ;
-
-    // Multi-layered displacement
-    float t = uTime * uWaveSpeed;
-    float swellAxis = dot(worldXZ, uSwellDir);
-
-    // Primary swell (large, directional)
-    float swell = sin(swellAxis * 0.04 + t * 1.6) * 2.2 * uWaveIntensity;
-
-    // Secondary chop (smaller, cross-directional)
-    float chop = sin(worldXZ.x * 0.07 - worldXZ.y * 0.05 + t * 2.8) * 0.7 * uWaveIntensity;
-
-    // Organic noise layer (fractal brownian motion)
-    float noiseDisp = (fbm(worldXZ * 0.025 + t * 0.3) - 0.5) * 3.0 * uWaveIntensity;
-
-    // Fine ripples
-    float ripple = sin(worldXZ.x * 0.18 + t * 4.2) * sin(worldXZ.y * 0.14 - t * 3.5) * 0.35 * uWaveIntensity;
-
-    float height = swell + chop + noiseDisp + ripple + uTideOffset;
-    pos.z = height; // PlaneGeometry is in XY, rotated to XZ later; z = "up" before rotation
-
-    vHeight = height;
-
-    // Compute normal from neighboring displacement
-    float dx = 0.5;
-    vec2 px = worldXZ + vec2(dx, 0.0);
-    vec2 pz = worldXZ + vec2(0.0, dx);
-    float hx = sin(dot(px, uSwellDir) * 0.04 + t * 1.6) * 2.2 * uWaveIntensity
-             + (fbm(px * 0.025 + t * 0.3) - 0.5) * 3.0 * uWaveIntensity;
-    float hz = sin(dot(pz, uSwellDir) * 0.04 + t * 1.6) * 2.2 * uWaveIntensity
-             + (fbm(pz * 0.025 + t * 0.3) - 0.5) * 3.0 * uWaveIntensity;
-    vNormal = normalize(vec3(height - hx, dx, height - hz));
-
-    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-    vViewPosition = -mvPosition.xyz;
-    gl_Position = projectionMatrix * mvPosition;
-  }
-`;
-
-const waterFragmentShader = /* glsl */ `
-  uniform vec3 uWaterColor;
-  uniform vec3 uDeepColor;
-  uniform vec3 uSpecularColor;
-  uniform float uNight;
-  uniform vec3 uFogColor;
-  uniform float uFogNear;
-  uniform float uFogFar;
-
-  varying float vHeight;
-  varying vec2 vWorldPos;
-  varying vec3 vNormal;
-  varying vec3 vViewPosition;
-
-  void main() {
-    // Depth-based color mixing
-    float depthFactor = smoothstep(-3.0, 4.0, vHeight);
-    vec3 baseColor = mix(uDeepColor, uWaterColor, depthFactor);
-
-    // Specular highlight (sun reflection on waves)
-    vec3 viewDir = normalize(vViewPosition);
-    vec3 lightDir = normalize(vec3(-0.5, 0.8, 0.3));
-    vec3 halfDir = normalize(lightDir + viewDir);
-    float spec = pow(max(dot(vNormal, halfDir), 0.0), 64.0);
-    float specIntensity = mix(0.6, 0.15, uNight);
-    vec3 specular = uSpecularColor * spec * specIntensity;
-
-    // Foam on wave crests
-    float foam = smoothstep(2.5, 4.0, vHeight) * 0.18;
-    vec3 foamColor = vec3(0.85, 0.92, 0.95);
-
-    vec3 color = baseColor + specular + foamColor * foam;
-
-    // Fog
-    float fogDepth = length(vViewPosition);
-    float fogFactor = smoothstep(uFogNear, uFogFar, fogDepth);
-    color = mix(color, uFogColor, fogFactor);
-
-    gl_FragColor = vec4(color, 0.93);
-  }
-`;
-
-/* ── Water Tile Creation ─────────────────────────────────────────────── */
+import { TILE_SIZE, WORLD_WIDTH, WORLD_DEPTH, type WaterTile } from "./constants";
 
 interface ShaderWaterTile {
-  mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
+  mesh: Water;
+  baseX: number;
+  baseZ: number;
   lightnessOffset: number;
+  normalTexture: THREE.Texture;
 }
 
-// We keep a parallel array of shader tiles for uniform updates
-const shaderTiles: ShaderWaterTile[] = [];
+interface WaterUniforms {
+  time: { value: number };
+  size: { value: number };
+  distortionScale: { value: number };
+  waterColor: { value: THREE.Color };
+  sunColor: { value: THREE.Color };
+  sunDirection: { value: THREE.Vector3 };
+}
 
-/** Create the tiled water plane with displacement shader. */
+const shaderTiles: ShaderWaterTile[] = [];
+const _sunDirection = new THREE.Vector3();
+const _waterColor = new THREE.Color();
+const _currentOffset = new THREE.Vector2(0, 0);
+let _lastCurrentTime = 0;
+const WATER_NORMALS_URL = "https://threejs.org/examples/textures/waternormals.jpg";
+
+// East is mirrored to negative X in world space. Keep the footprint biased east + slightly north.
+const WATER_OVERSCAN_WEST = TILE_SIZE * 3;
+const WATER_OVERSCAN_EAST = TILE_SIZE * 8;
+const WATER_OVERSCAN_SOUTH = TILE_SIZE * 1;
+const WATER_OVERSCAN_NORTH = TILE_SIZE * 2;
+const WATER_SUBDIVISIONS_PER_TILE = 18;
+const MIN_WATER_SUBDIVISIONS = 48;
+
+function createWaterNormalsTexture(): THREE.Texture {
+  const texture = new THREE.TextureLoader().load(WATER_NORMALS_URL);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
+
+function getSunDirection(night: boolean): THREE.Vector3 {
+  const now = new Date();
+  const hours = now.getHours() + now.getMinutes() / 60;
+  const daylightT = THREE.MathUtils.clamp((hours - 6) / 12, 0, 1);
+
+  const elevation = night ? -4 : 6 + Math.sin(daylightT * Math.PI) * 58;
+  const azimuth = 180 + (daylightT - 0.5) * 130;
+
+  const phi = THREE.MathUtils.degToRad(90 - elevation);
+  const theta = THREE.MathUtils.degToRad(azimuth);
+  return _sunDirection.setFromSphericalCoords(1, phi, theta).normalize();
+}
+
+function getWaterUniforms(mesh: Water): WaterUniforms | null {
+  const material = mesh.material as THREE.ShaderMaterial;
+  const uniforms = material.uniforms as Partial<WaterUniforms> | undefined;
+  if (!uniforms) return null;
+  if (
+    !uniforms.time ||
+    !uniforms.size ||
+    !uniforms.distortionScale ||
+    !uniforms.waterColor ||
+    !uniforms.sunColor ||
+    !uniforms.sunDirection
+  ) {
+    return null;
+  }
+  return uniforms as WaterUniforms;
+}
+
+/** Create one continuous Water surface (Three.js ocean example style). */
 export function createWaterTiles(scene: THREE.Scene): WaterTile[] {
   const tiles: WaterTile[] = [];
   shaderTiles.length = 0;
 
-  for (let tx = 0; tx < WORLD_WIDTH / TILE_SIZE; tx += 1) {
-    for (let tz = 0; tz < WORLD_DEPTH / TILE_SIZE; tz += 1) {
-      const x = tx * TILE_SIZE - WORLD_WIDTH * 0.5 + TILE_SIZE * 0.5;
-      const z = tz * TILE_SIZE - WORLD_DEPTH * 0.5 + TILE_SIZE * 0.5;
-      const variant = (tx + tz) % TILE_VARIANTS;
-      const lightnessOffset = (variant - (TILE_VARIANTS - 1) * 0.5) * 0.012;
+  const minX = -WORLD_WIDTH * 0.5 - WATER_OVERSCAN_EAST;
+  const maxX = WORLD_WIDTH * 0.5 + WATER_OVERSCAN_WEST;
+  const minZ = -WORLD_DEPTH * 0.5 - WATER_OVERSCAN_SOUTH;
+  const maxZ = WORLD_DEPTH * 0.5 + WATER_OVERSCAN_NORTH;
 
-      const geometry = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE, 20, 20);
+  const width = maxX - minX;
+  const depth = maxZ - minZ;
+  const centerX = (minX + maxX) * 0.5;
+  const centerZ = (minZ + maxZ) * 0.5;
 
-      const material = new THREE.ShaderMaterial({
-        vertexShader: waterVertexShader,
-        fragmentShader: waterFragmentShader,
-        uniforms: {
-          uTime: { value: 0 },
-          uWaveIntensity: { value: 0.5 },
-          uWaveSpeed: { value: 1.0 },
-          uSwellDir: { value: new THREE.Vector2(0.7, 0.7) },
-          uTideOffset: { value: 0 },
-          uTileOffset: { value: new THREE.Vector2(x, z) },
-          uWaterColor: { value: new THREE.Color("#3a84a8") },
-          uDeepColor: { value: new THREE.Color("#1a4a6a") },
-          uSpecularColor: { value: new THREE.Color("#f6e5b1") },
-          uNight: { value: 0 },
-          uFogColor: { value: new THREE.Color("#a7c5d8") },
-          uFogNear: { value: 800 },
-          uFogFar: { value: 2200 },
-        },
-        transparent: true,
-        side: THREE.DoubleSide,
-        fog: false, // We handle fog in the shader
-      });
+  const segmentsX = Math.max(
+    MIN_WATER_SUBDIVISIONS,
+    Math.ceil((width / TILE_SIZE) * WATER_SUBDIVISIONS_PER_TILE),
+  );
+  const segmentsZ = Math.max(
+    MIN_WATER_SUBDIVISIONS,
+    Math.ceil((depth / TILE_SIZE) * WATER_SUBDIVISIONS_PER_TILE),
+  );
 
-      const tile = new THREE.Mesh(geometry, material);
-      tile.rotation.x = -Math.PI / 2;
-      tile.position.set(x, 0, z);
-      tile.receiveShadow = true;
-      scene.add(tile);
+  const geometry = new THREE.PlaneGeometry(width, depth, segmentsX, segmentsZ);
+  const normalTexture = createWaterNormalsTexture();
 
-      // Store the positionAttr/baseXZ for WaterTile interface compat
-      const positionAttr = geometry.attributes.position as THREE.BufferAttribute;
-      const baseXZ = new Float32Array(positionAttr.count * 2);
-      for (let i = 0; i < positionAttr.count; i += 1) {
-        baseXZ[i * 2] = positionAttr.getX(i);
-        baseXZ[i * 2 + 1] = positionAttr.getZ(i);
-      }
+  const water = new Water(geometry, {
+    textureWidth: 1024,
+    textureHeight: 1024,
+    waterNormals: normalTexture,
+    sunDirection: new THREE.Vector3(0.2, 1, 0.12).normalize(),
+    sunColor: "#ffffff",
+    waterColor: "#214a66",
+    distortionScale: 6.2,
+    fog: scene.fog != null,
+    alpha: 0.95,
+  });
 
-      // Use 'as any' for the mesh type since WaterTile expects MeshStandardMaterial
-      // but we're using ShaderMaterial. The WaterTile fields are still populated for compat.
-      tiles.push({
-        mesh: tile as unknown as WaterTile["mesh"],
-        positionAttr,
-        baseXZ,
-        lightnessOffset,
-      });
+  water.rotation.x = -Math.PI / 2;
+  water.position.set(centerX, 0, centerZ);
+  water.receiveShadow = true;
+  scene.add(water);
 
-      shaderTiles.push({ mesh: tile, lightnessOffset });
-    }
+  const positionAttr = geometry.attributes.position as THREE.BufferAttribute;
+  const baseXZ = new Float32Array(positionAttr.count * 2);
+  for (let i = 0; i < positionAttr.count; i += 1) {
+    baseXZ[i * 2] = positionAttr.getX(i);
+    baseXZ[i * 2 + 1] = positionAttr.getZ(i);
   }
+
+  const lightnessOffset = 0;
+  tiles.push({
+    mesh: water as unknown as WaterTile["mesh"],
+    positionAttr,
+    baseXZ,
+    lightnessOffset,
+  });
+  shaderTiles.push({ mesh: water, baseX: centerX, baseZ: centerZ, lightnessOffset, normalTexture });
+
   return tiles;
 }
 
-/** Animate water tiles for one frame by updating shader uniforms. */
+/** Animate Water shader uniforms each frame. */
 export function animateWaterTiles(
   _tiles: WaterTile[],
   env: HarborEnvironment,
   t: number,
   night: boolean,
 ): void {
-  const waterTempNorm = Math.min(Math.max((env.seaSurfaceTempC - 2) / 22, 0), 1);
-  const waveIntensity = Math.min(Math.max(env.waveHeightM / 2.2, 0.12), 1.9);
-  const waveSpeed = 0.65 + waveIntensity * 1.45;
-  const swellVec = degToVectorOnWater(env.swellDirectionDeg);
-  const tideHeightOffset = Math.min(Math.max(env.tideLevelM * 1.3, -2.2), 2.4);
-  const waterHue = 0.56 - waterTempNorm * 0.06;
-  const waterSat = 0.48 + waterTempNorm * 0.12;
-  const waterLightBase = night ? 0.2 + waterTempNorm * 0.05 : 0.34 + waterTempNorm * 0.08;
+  // ── Current drift ──────────────────────────────────────────────────
+  const now = performance.now() * 0.001; // seconds
+  if (_lastCurrentTime === 0) _lastCurrentTime = now;
+  const dt = now - _lastCurrentTime;
+  _lastCurrentTime = now;
 
-  const fogColor = night ? "#1d2b3b" : "#a7c5d8";
-  const fogNear = night ? 350 : 820;
-  const fogFar = night ? 1200 : 2200;
+  if (dt < 1 && env.currentSpeedKnots > 0.05) {
+    // Compass heading → math angle (clockwise from N → counter-clockwise from +X)
+    const rad = THREE.MathUtils.degToRad(env.currentDirectionDeg);
+    // Compass: 0°=N(+Z), 90°=E(-X in mirrored world space)
+    const dx = -Math.sin(rad) * env.currentSpeedKnots * 0.35 * dt;
+    const dz = Math.cos(rad) * env.currentSpeedKnots * 0.35 * dt;
+    _currentOffset.x += dx;
+    _currentOffset.y += dz;
 
-  const waterColor = new THREE.Color();
-  const deepColor = new THREE.Color();
+    // Wrap to avoid float precision drift
+    const WRAP = 10000;
+    if (Math.abs(_currentOffset.x) > WRAP) _currentOffset.x %= WRAP;
+    if (Math.abs(_currentOffset.y) > WRAP) _currentOffset.y %= WRAP;
+  }
 
   for (const tile of shaderTiles) {
-    const u = tile.mesh.material.uniforms;
-    u.uTime.value = t;
-    u.uWaveIntensity.value = waveIntensity;
-    u.uWaveSpeed.value = waveSpeed;
-    u.uSwellDir.value.set(swellVec.x, swellVec.y);
-    u.uTideOffset.value = tideHeightOffset;
-    u.uNight.value = night ? 1 : 0;
+    tile.mesh.position.x = tile.baseX + _currentOffset.x;
+    tile.mesh.position.z = tile.baseZ + _currentOffset.y;
+  }
 
-    waterColor.setHSL(waterHue, waterSat, waterLightBase + tile.lightnessOffset);
-    deepColor.setHSL(waterHue + 0.02, waterSat + 0.08, (waterLightBase + tile.lightnessOffset) * 0.55);
-    u.uWaterColor.value.copy(waterColor);
-    u.uDeepColor.value.copy(deepColor);
+  const waveIntensity = THREE.MathUtils.clamp(env.waveHeightM / 1.7, 0.18, 2.4);
+  // Lower size values produce broader, larger wave patterns in Water.js noise.
+  const swellScale = 0.35 + waveIntensity * 0.6;
+  const distortionScale = 4.0 + waveIntensity * 8.0 + env.windSpeedMph * 0.07;
+  const waterTempNorm = THREE.MathUtils.clamp((env.seaSurfaceTempC - 2) / 22, 0, 1);
+  const waterHue = 0.565 - waterTempNorm * 0.045;
+  const waterSat = 0.5 + waterTempNorm * 0.08;
+  const waterLight = night ? 0.12 + waterTempNorm * 0.03 : 0.2 + waterTempNorm * 0.05;
 
-    u.uFogColor.value.set(fogColor);
-    u.uFogNear.value = fogNear;
-    u.uFogFar.value = fogFar;
+  _waterColor.setHSL(waterHue, waterSat, waterLight);
+  const sunDirection = getSunDirection(night);
+  const sunColor = night ? "#9caec9" : "#ffffff";
+
+  for (const tile of shaderTiles) {
+    const uniforms = getWaterUniforms(tile.mesh);
+    if (!uniforms) continue;
+
+    uniforms.time.value = t * (0.35 + waveIntensity * 0.14);
+    uniforms.size.value = swellScale;
+    uniforms.distortionScale.value = distortionScale;
+    uniforms.waterColor.value.copy(_waterColor);
+    uniforms.sunColor.value.set(sunColor);
+    uniforms.sunDirection.value.copy(sunDirection);
   }
 }
 
-/** Dispose water tile resources. */
+/** Dispose water resources. */
 export function disposeWaterTiles(scene: THREE.Scene, tiles: WaterTile[]): void {
-  for (const tile of tiles) {
+  for (const tile of shaderTiles) {
     scene.remove(tile.mesh);
     tile.mesh.geometry.dispose();
     tile.mesh.material.dispose();
+    tile.normalTexture.dispose();
   }
   tiles.length = 0;
   shaderTiles.length = 0;

@@ -6,6 +6,8 @@ export interface HarborEnvironment {
   waveHeightM: number;
   swellDirectionDeg: number;
   seaSurfaceTempC: number;
+  currentSpeedKnots: number;
+  currentDirectionDeg: number;
   windSpeedMph: number;
   windDirectionDeg: number;
   windDirectionCardinal: string;
@@ -65,6 +67,7 @@ function parseWind(wind: string): { mph: number; directionCardinal: string; dire
 
 export function toHarborEnvironment(sources: IntegrationSnapshot[]): HarborEnvironment {
   const noaa = sourceById(sources, "noaa-coops");
+  const noaaCurrents = sourceById(sources, "noaa-currents");
   const openMeteo = sourceById(sources, "open-meteo-marine");
   const nws = sourceById(sources, "nws");
 
@@ -76,6 +79,8 @@ export function toHarborEnvironment(sources: IntegrationSnapshot[]): HarborEnvir
     waveHeightM: numberValue(openMeteo?.data.waveHeightM, 0.35),
     swellDirectionDeg: numberValue(openMeteo?.data.swellDirectionDeg, 90),
     seaSurfaceTempC: numberValue(openMeteo?.data.seaSurfaceTempC, 10),
+    currentSpeedKnots: numberValue(noaaCurrents?.data.speedKnots, 0),
+    currentDirectionDeg: numberValue(noaaCurrents?.data.directionDeg, 0),
     windSpeedMph: wind.mph,
     windDirectionDeg: wind.directionDeg,
     windDirectionCardinal: wind.directionCardinal,

@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 2,
+  "complexity": null,
+  "created_at": "2026-02-25T22:06:13Z",
+  "created_by": "agent:claude-opus-4-impl",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-25T22:10:33Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJBDN57HC5SCRB24ZTJKRJ3Q",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJBDD73NQZG7VNTXQYCM3VKT",
+  "last_event_id": "ev_01KJBDN5A4SZGQBZ3BQ0MCP9WB",
+  "last_status_changed_at": "2026-02-25T22:10:33Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-59",
+  "status": "done",
+  "tags": null,
+  "title": "Add real-time ocean current from NOAA Currents API",
+  "type": "task",
+  "updated_at": "2026-02-25T22:10:33Z",
+  "urgency": null
+}

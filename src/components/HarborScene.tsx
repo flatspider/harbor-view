@@ -21,7 +21,7 @@ import { createWaterTiles, animateWaterTiles, disposeWaterTiles } from "../scene
 import { reconcileShips, animateShips } from "../scene/ships";
 import { createWindParticles, animateAtmosphere, disposeWindParticles } from "../scene/atmosphere";
 import { HARBOR_LABELS, projectLabels } from "../scene/labels";
-import { createSkyBackdrop, animateSky } from "../scene/sky";
+import { createSkyBackdrop, animateSky, disposeSkyBackdrop } from "../scene/sky";
 
 interface HarborSceneProps {
   ships: Map<number, ShipData>;
@@ -93,7 +93,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
 
     // Scene
     const scene = new THREE.Scene();
-    // No scene.background — let the sky gradient plane show through
+    // Scene background is handled via renderer clear color in the animation loop.
     scene.fog = new THREE.Fog("#a7c5d8", 800, 2200);
     sceneInstanceRef.current = scene;
 
@@ -108,6 +108,8 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.setClearColor("#89b3cf", 1);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.62;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     mount.appendChild(renderer.domElement);
@@ -143,7 +145,6 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     scene.add(sunLight);
     sunLightRef.current = sunLight;
 
-    // Layer setup
     const skyMesh = createSkyBackdrop(scene);
     skyMeshRef.current = skyMesh;
 
@@ -260,10 +261,10 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         cachedNight,
       );
       rendererRef.current.setClearColor(backgroundColorRef.current, 1);
-      animateShips(shipMarkers, t);
       if (skyMeshRef.current) {
         animateSky(skyMeshRef.current, cachedNight, env.forecastSummary);
       }
+      animateShips(shipMarkers, t);
       controls.update();
 
       if (sceneRef.current && cameraRef.current) {
@@ -294,9 +295,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       disposeWindParticles(windParticlesRef.current);
       windParticlesRef.current = null;
       if (skyMeshRef.current) {
-        scene.remove(skyMeshRef.current);
-        skyMeshRef.current.geometry.dispose();
-        (skyMeshRef.current.material as THREE.Material).dispose();
+        disposeSkyBackdrop(scene, skyMeshRef.current);
         skyMeshRef.current = null;
       }
       renderer.dispose();

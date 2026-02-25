@@ -8,6 +8,16 @@ function formatMeters(value: number): string {
   return `${value.toFixed(2)} m`;
 }
 
+const CARDINALS = [
+  "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+  "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
+] as const;
+
+function degreesToCardinal(deg: number): string {
+  const index = Math.round(((deg % 360) + 360) % 360 / 22.5) % 16;
+  return CARDINALS[index];
+}
+
 export function ConditionsStrip({ environment }: ConditionsStripProps) {
   return (
     <section className="conditions-strip" aria-label="Harbor conditions">
@@ -28,6 +38,12 @@ export function ConditionsStrip({ environment }: ConditionsStripProps) {
       <div className="condition-pill">
         <span>Sea Temp</span>
         <strong>{environment.seaSurfaceTempC.toFixed(1)} C</strong>
+      </div>
+      <div className="condition-pill">
+        <span>Current</span>
+        <strong>
+          {environment.currentSpeedKnots.toFixed(1)} kt {degreesToCardinal(environment.currentDirectionDeg)}
+        </strong>
       </div>
       <div className="condition-pill">
         <span>Forecast</span>

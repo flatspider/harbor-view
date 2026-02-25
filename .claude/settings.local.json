@@ -40,7 +40,10 @@
       "mcp__playwright__browser_navigate",
       "mcp__playwright__browser_take_screenshot",
       "mcp__playwright__browser_wait_for",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "WebFetch(domain:tidesandcurrents.noaa.gov)",
+      "WebFetch(domain:api.tidesandcurrents.noaa.gov)",
+      "Bash(curl:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -23,6 +23,7 @@ const NY_HARBOR_POINT = {
 } as const;
 
 const NOAA_STATION_ID = process.env.NOAA_COOPS_STATION_ID ?? "8518750";
+const NOAA_CURRENTS_STATION_ID = process.env.NOAA_CURRENTS_STATION_ID ?? "n03020";
 const ADSB_RADIUS_NM = Number(process.env.ADSB_RADIUS_NM ?? 25);
 const STORMGLASS_API_KEY = process.env.STORMGLASS_API_KEY ?? "";
 const PORTWATCH_API_URL =
@@ -435,6 +436,36 @@ async function getNoaaCoopsSnapshot(): Promise<IntegrationSnapshot> {
   }
 }
 
+async function getNoaaCurrentsSnapshot(): Promise<IntegrationSnapshot> {
+  try {
+    const raw = await fetchJson(
+      `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=latest&station=${NOAA_CURRENTS_STATION_ID}&product=currents&time_zone=gmt&units=english&format=json`,
+    );
+
+    const record = ensureRecord(raw);
+    const data = asArray(record?.data);
+    const latest = ensureRecord(data[data.length - 1]);
+
+    return makeSnapshot("noaa-currents", "NOAA Currents", "ok", {
+      stationId: NOAA_CURRENTS_STATION_ID,
+      speedKnots: asNumber(latest?.s),
+      directionDeg: asNumber(latest?.d),
+      bin: asString(latest?.b),
+      time: asString(latest?.t),
+    });
+  } catch (error) {
+    return makeSnapshot(
+      "noaa-currents",
+      "NOAA Currents",
+      "error",
+      {
+        stationId: NOAA_CURRENTS_STATION_ID,
+      },
+      error instanceof Error ? error.message : "Unable to fetch NOAA Currents",
+    );
+  }
+}
+
 async function getOpenMeteoSnapshot(): Promise<IntegrationSnapshot> {
   try {
     const url =
@@ -696,6 +727,7 @@ async function refreshIntegrationSnapshots() {
   integrationsInFlight = (async () => {
     const next = await Promise.all([
       getNoaaCoopsSnapshot(),
+      getNoaaCurrentsSnapshot(),
       getOpenMeteoSnapshot(),
       getNwsSnapshot(),
       getAdsbSnapshot(),

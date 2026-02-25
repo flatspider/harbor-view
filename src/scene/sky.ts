@@ -1,128 +1,94 @@
 import * as THREE from "three";
+import { Sky } from "three/examples/jsm/objects/Sky.js";
 import { WORLD_WIDTH, WORLD_DEPTH, moodFromForecast } from "./constants";
 
-/**
- * Ghibli-style procedural sky background.
- *
- * Creates a large vertical plane behind the scene with vertex-colored
- * gradient bands that shift with time of day and weather mood.
- */
-
-export interface SkyPalette {
-  zenith: THREE.Color;
-  mid: THREE.Color;
-  horizon: THREE.Color;
-  haze: THREE.Color;
+interface SkyUniforms {
+  turbidity: { value: number };
+  rayleigh: { value: number };
+  mieCoefficient: { value: number };
+  mieDirectionalG: { value: number };
+  sunPosition: { value: THREE.Vector3 };
+  cloudScale: { value: number };
+  cloudSpeed: { value: number };
+  cloudCoverage: { value: number };
+  cloudDensity: { value: number };
+  cloudElevation: { value: number };
+  time: { value: number };
 }
 
-const PALETTES = {
-  dayClear: {
-    zenith: new THREE.Color("#4a7fb5"),
-    mid: new THREE.Color("#7db8d9"),
-    horizon: new THREE.Color("#c8dfe8"),
-    haze: new THREE.Color("#e8d8c4"),
-  },
-  dayOvercast: {
-    zenith: new THREE.Color("#7a8fa0"),
-    mid: new THREE.Color("#99aab5"),
-    horizon: new THREE.Color("#bcc7ce"),
-    haze: new THREE.Color("#c8c0b6"),
-  },
-  dayRain: {
-    zenith: new THREE.Color("#5e6f7e"),
-    mid: new THREE.Color("#7a8c99"),
-    horizon: new THREE.Color("#9aabb5"),
-    haze: new THREE.Color("#a09a92"),
-  },
-  dayFog: {
-    zenith: new THREE.Color("#8a9caa"),
-    mid: new THREE.Color("#a5b5bf"),
-    horizon: new THREE.Color("#c0ccd2"),
-    haze: new THREE.Color("#d0ccc6"),
-  },
-  goldenHour: {
-    zenith: new THREE.Color("#5b7ca0"),
-    mid: new THREE.Color("#c49a6c"),
-    horizon: new THREE.Color("#e8b87a"),
-    haze: new THREE.Color("#f0d0a0"),
-  },
-  night: {
-    zenith: new THREE.Color("#0d1520"),
-    mid: new THREE.Color("#1a2840"),
-    horizon: new THREE.Color("#243550"),
-    haze: new THREE.Color("#1e2d42"),
-  },
-} as const;
+const _sunPosition = new THREE.Vector3();
 
-function getSkyPalette(night: boolean, mood: string): SkyPalette {
-  if (night) return PALETTES.night;
-  const hour = new Date().getHours();
-  if ((hour >= 6 && hour < 8) || (hour >= 17 && hour < 19)) return PALETTES.goldenHour;
-  if (mood === "fog") return PALETTES.dayFog;
-  if (mood === "rain") return PALETTES.dayRain;
-  if (mood === "overcast") return PALETTES.dayOvercast;
-  return PALETTES.dayClear;
+function getSunPosition(night: boolean): THREE.Vector3 {
+  const now = new Date();
+  const hours = now.getHours() + now.getMinutes() / 60;
+  const daylightT = THREE.MathUtils.clamp((hours - 6) / 12, 0, 1);
+
+  const elevation = night ? -6 : 2 + Math.sin(daylightT * Math.PI) * 68;
+  const azimuth = 180 + (daylightT - 0.5) * 160;
+  const phi = THREE.MathUtils.degToRad(90 - elevation);
+  const theta = THREE.MathUtils.degToRad(azimuth);
+
+  return _sunPosition.setFromSphericalCoords(1, phi, theta);
 }
 
-// We use 5 rows of vertices for smooth gradient bands.
-const SKY_ROWS = 5;
-const SKY_WIDTH = WORLD_WIDTH * 4;
-const SKY_HEIGHT = WORLD_DEPTH * 2.5;
+function getSkyUniforms(mesh: THREE.Mesh): SkyUniforms | null {
+  const material = mesh.material as THREE.ShaderMaterial;
+  const uniforms = material.uniforms as Partial<SkyUniforms> | undefined;
+  if (!uniforms) return null;
+  if (
+    !uniforms.turbidity ||
+    !uniforms.rayleigh ||
+    !uniforms.mieCoefficient ||
+    !uniforms.mieDirectionalG ||
+    !uniforms.sunPosition ||
+    !uniforms.cloudScale ||
+    !uniforms.cloudSpeed ||
+    !uniforms.cloudCoverage ||
+    !uniforms.cloudDensity ||
+    !uniforms.cloudElevation ||
+    !uniforms.time
+  ) {
+    return null;
+  }
+  return uniforms as SkyUniforms;
+}
 
-/** Create the sky backdrop mesh and add it to the scene. */
+/** Create Three.js Sky object (same model as webgl_shaders_sky). */
 export function createSkyBackdrop(scene: THREE.Scene): THREE.Mesh {
-  const geometry = new THREE.PlaneGeometry(SKY_WIDTH, SKY_HEIGHT, 1, SKY_ROWS - 1);
-  const colors = new Float32Array(SKY_ROWS * 2 * 3); // 2 verts per row, 3 components
-  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-
-  const material = new THREE.MeshBasicMaterial({
-    vertexColors: true,
-    fog: false,
-    // Plane sits in front of the camera and must render from its back-facing side.
-    side: THREE.DoubleSide,
-    depthWrite: false,
-  });
-
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.renderOrder = -1;
-  // Position far behind the scene, facing the camera
-  mesh.position.set(0, SKY_HEIGHT * 0.28, WORLD_DEPTH * 1.8);
-  scene.add(mesh);
-  return mesh;
+  const sky = new Sky();
+  sky.scale.setScalar(Math.max(WORLD_WIDTH, WORLD_DEPTH) * 14);
+  scene.add(sky);
+  return sky;
 }
 
-/** Update sky colors for current conditions. */
+/** Animate sky scattering/cloud uniforms each frame. */
 export function animateSky(
   skyMesh: THREE.Mesh,
   night: boolean,
   forecastSummary: string,
 ): void {
+  const uniforms = getSkyUniforms(skyMesh);
+  if (!uniforms) return;
+
   const mood = moodFromForecast(forecastSummary);
-  const palette = getSkyPalette(night, mood);
-  const colorAttr = skyMesh.geometry.attributes.color as THREE.BufferAttribute;
-  const arr = colorAttr.array as Float32Array;
+  const cloudiness = mood === "rain" ? 0.42 : mood === "overcast" ? 0.34 : mood === "fog" ? 0.24 : 0.14;
 
-  // Rows from bottom (horizon/haze) to top (zenith).
-  // With SKY_ROWS=5: row 0 = bottom, row 4 = top
-  const bandColors = [
-    palette.haze,
-    palette.horizon,
-    palette.mid,
-    palette.mid.clone().lerp(palette.zenith, 0.5),
-    palette.zenith,
-  ];
+  uniforms.turbidity.value = night ? 9.5 : 4.2 + cloudiness * 4.1;
+  uniforms.rayleigh.value = night ? 0.18 : mood === "fog" ? 0.4 : 0.92;
+  uniforms.mieCoefficient.value = night ? 0.009 : 0.0035 + cloudiness * 0.0028;
+  uniforms.mieDirectionalG.value = night ? 0.88 : mood === "fog" ? 0.73 : 0.8;
+  uniforms.cloudCoverage.value = night ? 0.24 : cloudiness;
+  uniforms.cloudDensity.value = night ? 0.18 : THREE.MathUtils.clamp(cloudiness * 0.72, 0.09, 0.32);
+  uniforms.cloudScale.value = 0.00016;
+  uniforms.cloudSpeed.value = night ? 0.000035 : 0.00006;
+  uniforms.cloudElevation.value = 0.5;
+  uniforms.time.value = performance.now() * 0.00004;
+  uniforms.sunPosition.value.copy(getSunPosition(night));
+}
 
-  for (let row = 0; row < SKY_ROWS; row++) {
-    const color = bandColors[row];
-    // Two vertices per row (left and right)
-    const i = row * 2;
-    arr[i * 3] = color.r;
-    arr[i * 3 + 1] = color.g;
-    arr[i * 3 + 2] = color.b;
-    arr[(i + 1) * 3] = color.r;
-    arr[(i + 1) * 3 + 1] = color.g;
-    arr[(i + 1) * 3 + 2] = color.b;
-  }
-
-  colorAttr.needsUpdate = true;
+/** Dispose sky resources. */
+export function disposeSkyBackdrop(scene: THREE.Scene, skyMesh: THREE.Mesh): void {
+  scene.remove(skyMesh);
+  skyMesh.geometry.dispose();
+  (skyMesh.material as THREE.Material).dispose();
 }

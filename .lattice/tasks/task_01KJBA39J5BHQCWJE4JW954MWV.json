@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-25T21:08:22Z",
+  "created_by": "agent:claude-opus-4-orchestrator",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-25T21:15:59Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJBAH7JZZXHTCZ6X3DC6ZGGS",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJBA39J5BHQCWJE4JW954MWV",
+  "last_event_id": "ev_01KJBAH7NJSR80HTWFSMMEFBZ4",
+  "last_status_changed_at": "2026-02-25T21:15:59Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-55",
+  "status": "done",
+  "tags": null,
+  "title": "Refactor scene layers into modular components (HarborScene, OceanLayer, ShipLayer, AtmosphericOverlay)",
+  "type": "task",
+  "updated_at": "2026-02-25T21:15:59Z",
+  "urgency": null
+}

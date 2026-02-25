@@ -34,7 +34,17 @@
       "Bash(sleep 5 && curl -s --connect-timeout 5 --max-time 10 http://35.172.150.216/api/health 2>&1)",
       "Bash(lattice show:*)",
       "Bash(git rm:*)",
-      "Bash(gh run:*)"
+      "Bash(gh run:*)",
+      "Bash(lattice comment:*)",
+      "Bash(lsof:*)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_wait_for",
+      "Bash(wc:*)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "playwright"
+  ]
 }

@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-25T21:07:32Z",
+  "created_by": "agent:claude-opus-4-orchestrator",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-25T21:08:16Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJBA33NJTZ1XPE77PSMHDCAM",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJBA1RVATAEC2YS10CCJK1KF",
+  "last_event_id": "ev_01KJBA33QS32GK2CD13HV7M6VP",
+  "last_status_changed_at": "2026-02-25T21:08:16Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-54",
+  "status": "done",
+  "tags": null,
+  "title": "Stabilize AIS ingestion: verify subscription-within-3s, reconnect logic, static-vs-dynamic merge by MMSI",
+  "type": "task",
+  "updated_at": "2026-02-25T21:08:16Z",
+  "urgency": null
+}

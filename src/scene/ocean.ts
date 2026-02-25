@@ -17,7 +17,7 @@ const waterVertexShader = /* glsl */ `
   uniform float uWaveSpeed;
   uniform vec2 uSwellDir;
   uniform float uTideOffset;
-  uniform float uTileOffset;
+  uniform vec2 uTileOffset;
 
   varying float vHeight;
   varying vec2 vWorldPos;
@@ -53,7 +53,7 @@ const waterVertexShader = /* glsl */ `
 
   void main() {
     vec3 pos = position;
-    vec2 worldXZ = pos.xy + vec2(uTileOffset);
+    vec2 worldXZ = pos.xy + uTileOffset;
     vWorldPos = worldXZ;
 
     // Multi-layered displacement

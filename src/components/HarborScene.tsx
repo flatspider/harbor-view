@@ -259,6 +259,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         backgroundColorRef.current,
         cachedNight,
       );
+      rendererRef.current.setClearColor(backgroundColorRef.current, 1);
       animateShips(shipMarkers, t);
       if (skyMeshRef.current) {
         animateSky(skyMeshRef.current, cachedNight, env.forecastSummary);

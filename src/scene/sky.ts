@@ -78,7 +78,8 @@ export function createSkyBackdrop(scene: THREE.Scene): THREE.Mesh {
   const material = new THREE.MeshBasicMaterial({
     vertexColors: true,
     fog: false,
-    side: THREE.FrontSide,
+    // Plane sits in front of the camera and must render from its back-facing side.
+    side: THREE.DoubleSide,
     depthWrite: false,
   });
 

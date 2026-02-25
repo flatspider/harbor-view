@@ -2,6 +2,7 @@ import express from "express";
 import http from "node:http";
 import ViteExpress from "vite-express";
 import { WebSocket } from "ws";
+import postgres from "postgres";
 import type { AISMessage, ShipData } from "./src/types/ais";
 
 const PORT = Number(process.env.PORT ?? 5173);
@@ -30,6 +31,71 @@ const PORTWATCH_API_URL =
 
 const DATA_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
 const DATA_TTL_MS = 2 * 60 * 1000;
+const POSITION_FLUSH_INTERVAL_MS = 5000;
+
+/* ── Postgres ────────────────────────────────────────────────────────── */
+
+const DATABASE_URL = process.env.DATABASE_URL ?? "";
+
+const sql = DATABASE_URL
+  ? postgres(DATABASE_URL, {
+      max: 5,
+      idle_timeout: 30,
+      connect_timeout: 10,
+    })
+  : null;
+
+let dbConnected = false;
+
+interface PositionRow {
+  mmsi: number;
+  lat: number;
+  lon: number;
+  cog: number;
+  sog: number;
+  heading: number;
+  nav_status: number;
+  received_at: Date;
+}
+
+const positionBuffer: PositionRow[] = [];
+
+async function flushPositionBuffer() {
+  if (!sql || positionBuffer.length === 0) return;
+
+  const batch = positionBuffer.splice(0, positionBuffer.length);
+
+  try {
+    await sql`
+      INSERT INTO vessel_positions ${sql(batch, "mmsi", "lat", "lon", "cog", "sog", "heading", "nav_status", "received_at")}
+    `;
+  } catch (error) {
+    console.error("Failed to flush position buffer:", error);
+    // Put rows back for next attempt (at the front)
+    positionBuffer.unshift(...batch);
+  }
+}
+
+async function checkDbConnection() {
+  if (!sql) {
+    dbConnected = false;
+    return;
+  }
+  try {
+    await sql`SELECT 1`;
+    dbConnected = true;
+  } catch {
+    dbConnected = false;
+  }
+}
+
+// Periodically flush the position buffer
+const positionFlushInterval = sql
+  ? setInterval(() => void flushPositionBuffer(), POSITION_FLUSH_INTERVAL_MS)
+  : null;
+
+// Check DB connection on startup
+void checkDbConnection();
 
 type RelayStatus = "connecting" | "connected" | "disconnected" | "error";
 type IntegrationStatus = "ok" | "degraded" | "error" | "skipped";
@@ -194,6 +260,8 @@ function ingestAisMessage(data: AISMessage) {
   if (data.MessageType === "PositionReport" && data.Message.PositionReport) {
     const pos = data.Message.PositionReport;
 
+    const heading = pos.TrueHeading === 511 ? pos.Cog : pos.TrueHeading;
+
     ships.set(mmsi, {
       mmsi,
       name: existing?.name || metaData?.ShipName || `MMSI ${mmsi}`,
@@ -203,7 +271,7 @@ function ingestAisMessage(data: AISMessage) {
       lon: pos.Longitude,
       cog: pos.Cog,
       sog: pos.Sog,
-      heading: pos.TrueHeading === 511 ? pos.Cog : pos.TrueHeading,
+      heading,
       navStatus: pos.NavigationalStatus,
       shipType: existing?.shipType ?? 0,
       destination: existing?.destination ?? "",
@@ -213,6 +281,20 @@ function ingestAisMessage(data: AISMessage) {
       lastUpdate: now,
       lastPositionUpdate: now,
     });
+
+    // Buffer position for DB persistence
+    if (sql) {
+      positionBuffer.push({
+        mmsi,
+        lat: pos.Latitude,
+        lon: pos.Longitude,
+        cog: pos.Cog,
+        sog: pos.Sog,
+        heading,
+        nav_status: pos.NavigationalStatus,
+        received_at: new Date(now),
+      });
+    }
     return;
   }
 
@@ -639,6 +721,8 @@ app.get("/api/health", (_req, res) => {
     upstreamStatus,
     upstreamStatusMessage,
     shipCount: ships.size,
+    database: sql ? (dbConnected ? "connected" : "disconnected") : "not_configured",
+    positionBufferSize: positionBuffer.length,
     integrationsCount: integrationSnapshots.length,
     integrationsLastFetched:
       integrationsLastFetched > 0
@@ -683,6 +767,11 @@ setInterval(() => {
   void refreshIntegrationSnapshots();
 }, DATA_REFRESH_INTERVAL_MS);
 
+// Periodic DB health check (every 30s)
+if (sql) {
+  setInterval(() => void checkDbConnection(), 30000);
+}
+
 httpServer.listen(PORT, () => {
   console.log(`Harbor Watch server listening on http://localhost:${PORT}`);
 });
@@ -695,3 +784,29 @@ ViteExpress.bind(app, httpServer, () => {
     console.error("Failed to bind ViteExpress", error);
     process.exit(1);
   });
+
+/* ── Graceful shutdown ───────────────────────────────────────────────── */
+
+async function shutdown() {
+  console.log("Shutting down…");
+
+  if (positionFlushInterval) clearInterval(positionFlushInterval);
+
+  // Flush any remaining buffered positions
+  await flushPositionBuffer();
+
+  if (sql) {
+    await sql.end({ timeout: 5 });
+  }
+
+  if (upstream) {
+    upstream.close();
+    upstream = null;
+  }
+
+  httpServer.close();
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => void shutdown());
+process.on("SIGINT", () => void shutdown());

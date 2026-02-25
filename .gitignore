@@ -24,6 +24,9 @@ dist-ssr
 *.sln
 *.sw?
 
+# SSH keys
+*.pem
+
 # Raw geospatial source data and oversized intermediates
 public/assets/data/Coastline_of_New_Jersey.geojson
 public/assets/data/N40W075/

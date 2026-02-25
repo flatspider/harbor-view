@@ -40,11 +40,11 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
-            docker pull ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPOSITORY }}:latest
-            docker stop harbor-watch 2>/dev/null || true
-            docker rm harbor-watch 2>/dev/null || true
-            docker run -d \
+            aws ecr get-login-password --region us-east-1 | sudo docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
+            sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPOSITORY }}:latest
+            sudo docker stop harbor-watch 2>/dev/null || true
+            sudo docker rm harbor-watch 2>/dev/null || true
+            sudo docker run -d \
               --name harbor-watch \
               --restart unless-stopped \
               -p 80:8080 \

@@ -726,7 +726,6 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     const now = performance.now();
     let nextNightCheck = now;
     let cachedNight = isNightTime();
-    let lastLabelLayoutAt = -Infinity;
 
     const animate = (time: number) => {
       if (!sceneInstanceRef.current || !cameraRef.current || !rendererRef.current) return;
@@ -823,59 +822,56 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
 
       controls.update();
 
-      if (time - lastLabelLayoutAt >= 120) {
-        const placedRects: Array<{ left: number; right: number; top: number; bottom: number }> = [];
-        const overlapPadding = 10;
-        const isOverlapping = (
-          a: { left: number; right: number; top: number; bottom: number },
-          b: { left: number; right: number; top: number; bottom: number },
-        ) =>
-          a.left - overlapPadding < b.right &&
-          a.right + overlapPadding > b.left &&
-          a.top - overlapPadding < b.bottom &&
-          a.bottom + overlapPadding > b.top;
+      const placedRects: Array<{ left: number; right: number; top: number; bottom: number }> = [];
+      const overlapPadding = 10;
+      const isOverlapping = (
+        a: { left: number; right: number; top: number; bottom: number },
+        b: { left: number; right: number; top: number; bottom: number },
+      ) =>
+        a.left - overlapPadding < b.right &&
+        a.right + overlapPadding > b.left &&
+        a.top - overlapPadding < b.bottom &&
+        a.bottom + overlapPadding > b.top;
 
-        const projectedLabels = HARBOR_LABELS
-          .map((label) => {
-            const el = labelElementsRef.current.get(label.id);
-            if (!el || !cameraRef.current || !sceneRef.current) return null;
-            const world = latLonToWorld(label.lat, label.lon);
-            world.y = 8;
-            const projected = world.project(cameraRef.current);
-            const visible = projected.z < 1 && projected.z > -1;
-            if (!visible) return { label, el, visible: false, x: 0, y: 0 };
-            const x = ((projected.x + 1) * 0.5) * sceneRef.current.clientWidth + (label.offsetX ?? 0);
-            const y = ((-projected.y + 1) * 0.5) * sceneRef.current.clientHeight + (label.offsetY ?? 0);
-            return { label, el, visible: true, x, y };
-          })
-          .filter((entry): entry is NonNullable<typeof entry> => entry != null)
-          .sort((a, b) => b.label.priority - a.label.priority);
+      const projectedLabels = HARBOR_LABELS
+        .map((label) => {
+          const el = labelElementsRef.current.get(label.id);
+          if (!el || !cameraRef.current || !sceneRef.current) return null;
+          const world = latLonToWorld(label.lat, label.lon);
+          world.y = 8;
+          const projected = world.project(cameraRef.current);
+          const visible = projected.z < 1 && projected.z > -1;
+          if (!visible) return { label, el, visible: false, x: 0, y: 0 };
+          const x = ((projected.x + 1) * 0.5) * sceneRef.current.clientWidth + (label.offsetX ?? 0);
+          const y = ((-projected.y + 1) * 0.5) * sceneRef.current.clientHeight + (label.offsetY ?? 0);
+          return { label, el, visible: true, x, y };
+        })
+        .filter((entry): entry is NonNullable<typeof entry> => entry != null)
+        .sort((a, b) => b.label.priority - a.label.priority);
 
-        for (const entry of projectedLabels) {
-          const { label, el, x, y, visible } = entry;
-          if (!visible) {
-            el.style.opacity = "0";
-            continue;
-          }
-          const cachedSize = labelSizes.get(label.id);
-          const width = cachedSize?.width ?? (el.offsetWidth || 100);
-          const height = cachedSize?.height ?? (el.offsetHeight || 20);
-          labelSizes.set(label.id, { width, height });
-          const rect = {
-            left: x - width * 0.5,
-            right: x + width * 0.5,
-            top: y - height * 0.5,
-            bottom: y + height * 0.5,
-          };
-          if (placedRects.some((placed) => isOverlapping(rect, placed))) {
-            el.style.opacity = "0";
-            continue;
-          }
-          placedRects.push(rect);
-          el.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
-          el.style.opacity = "1";
+      for (const entry of projectedLabels) {
+        const { label, el, x, y, visible } = entry;
+        if (!visible) {
+          el.style.opacity = "0";
+          continue;
         }
-        lastLabelLayoutAt = time;
+        const cachedSize = labelSizes.get(label.id);
+        const width = cachedSize?.width ?? (el.offsetWidth || 100);
+        const height = cachedSize?.height ?? (el.offsetHeight || 20);
+        labelSizes.set(label.id, { width, height });
+        const rect = {
+          left: x - width * 0.5,
+          right: x + width * 0.5,
+          top: y - height * 0.5,
+          bottom: y + height * 0.5,
+        };
+        if (placedRects.some((placed) => isOverlapping(rect, placed))) {
+          el.style.opacity = "0";
+          continue;
+        }
+        placedRects.push(rect);
+        el.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
+        el.style.opacity = "1";
       }
 
       rendererRef.current.render(sceneInstanceRef.current, cameraRef.current);

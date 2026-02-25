@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
+import type { HarborEnvironment } from "../types/environment";
 import { WORLD_WIDTH, WORLD_DEPTH, moodFromForecast } from "./constants";
 
 interface SkyUniforms {
@@ -65,16 +66,16 @@ export function createSkyBackdrop(scene: THREE.Scene): THREE.Mesh {
 export function animateSky(
   skyMesh: THREE.Mesh,
   night: boolean,
-  forecastSummary: string,
+  env: HarborEnvironment,
 ): void {
   const uniforms = getSkyUniforms(skyMesh);
   if (!uniforms) return;
 
-  const mood = moodFromForecast(forecastSummary);
+  const mood = moodFromForecast(env.forecastSummary);
   const cloudiness = mood === "rain" ? 0.42 : mood === "overcast" ? 0.34 : mood === "fog" ? 0.24 : 0.14;
 
   uniforms.turbidity.value = night ? 9.5 : 4.2 + cloudiness * 4.1;
-  uniforms.rayleigh.value = night ? 0.18 : mood === "fog" ? 0.4 : 0.92;
+  uniforms.rayleigh.value = night ? 0.18 + env.moonIllumination * 0.12 : mood === "fog" ? 0.4 : 0.92;
   uniforms.mieCoefficient.value = night ? 0.009 : 0.0035 + cloudiness * 0.0028;
   uniforms.mieDirectionalG.value = night ? 0.88 : mood === "fog" ? 0.73 : 0.8;
   uniforms.cloudCoverage.value = night ? 0.24 : cloudiness;

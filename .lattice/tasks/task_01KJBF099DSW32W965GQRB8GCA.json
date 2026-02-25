@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-25T22:34:06Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-25T22:34:35Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJBF15SMAPR3WP6CF8Y63FX2",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJBF099DSW32W965GQRB8GCA",
+  "last_event_id": "ev_01KJBF15WAT4FNY8G73SX2ADQ4",
+  "last_status_changed_at": "2026-02-25T22:34:35Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-65",
+  "status": "done",
+  "tags": null,
+  "title": "Increase forced test current to 100 knots",
+  "type": "task",
+  "updated_at": "2026-02-25T22:34:35Z",
+  "urgency": null
+}

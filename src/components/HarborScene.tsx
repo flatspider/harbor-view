@@ -22,6 +22,7 @@ import { reconcileShips, animateShips } from "../scene/ships";
 import { createWindParticles, animateAtmosphere, disposeWindParticles } from "../scene/atmosphere";
 import { HARBOR_LABELS, projectLabels } from "../scene/labels";
 import { createSkyBackdrop, animateSky, disposeSkyBackdrop } from "../scene/sky";
+import { loadFerryRoutes, setFerryRouteNight, disposeFerryRoutes } from "../scene/ferryRoutes";
 
 interface HarborSceneProps {
   ships: Map<number, ShipData>;
@@ -157,6 +158,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     if (RENDER_LAND_POLYGONS) {
       void loadLandPolygons(scene, abortController.signal);
     }
+    void loadFerryRoutes(scene, abortController.signal);
 
     // Resize
     const handleResize = () => {
@@ -262,8 +264,9 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       );
       rendererRef.current.setClearColor(backgroundColorRef.current, 1);
       if (skyMeshRef.current) {
-        animateSky(skyMeshRef.current, cachedNight, env.forecastSummary);
+        animateSky(skyMeshRef.current, cachedNight, env);
       }
+      setFerryRouteNight(cachedNight);
       animateShips(shipMarkers, t);
       controls.update();
 
@@ -303,6 +306,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       shipMarkers.clear();
       raycastTargets.length = 0;
       labelSizes.clear();
+      disposeFerryRoutes(scene);
       disposeWaterTiles(scene, tiles);
       for (const object of coastlineObjects) {
         scene.remove(object);

@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-25T22:14:45Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-25T22:18:01Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJBE2V24PF614GJF6T1F7R9G",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJBDWV7GXWRPW5R4PG2XNH1H",
+  "last_event_id": "ev_01KJBE2V4JYK74C9F7DBD86F2Z",
+  "last_status_changed_at": "2026-02-25T22:18:01Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-60",
+  "status": "done",
+  "tags": null,
+  "title": "Improve ocean current modeling and constrained water rendering",
+  "type": "task",
+  "updated_at": "2026-02-25T22:18:01Z",
+  "urgency": null
+}

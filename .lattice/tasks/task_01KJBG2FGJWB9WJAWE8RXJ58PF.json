@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-25T22:52:46Z",
+  "created_by": "agent:claude-opus-4-impl",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-25T22:59:23Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJBGEFN5MHXMXZEAD0RYCNRH",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJBG2FGJWB9WJAWE8RXJ58PF",
+  "last_event_id": "ev_01KJBGEJV83KKBDDPZCDXPKPJ4",
+  "last_status_changed_at": "2026-02-25T22:59:23Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-68",
+  "status": "done",
+  "tags": null,
+  "title": "Add 4 new environmental data sources: NOAA PORTS, Moon Phase, Pressure Fog, Ferry Routes",
+  "type": "task",
+  "updated_at": "2026-02-25T22:59:23Z",
+  "urgency": null
+}

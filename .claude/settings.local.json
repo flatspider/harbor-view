@@ -43,7 +43,14 @@
       "Bash(wc:*)",
       "WebFetch(domain:tidesandcurrents.noaa.gov)",
       "WebFetch(domain:api.tidesandcurrents.noaa.gov)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "WebFetch(domain:www.ferry.nyc)",
+      "WebFetch(domain:nycferry.connexionz.net)",
+      "WebFetch(domain:www.tidesandcurrents.noaa.gov)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:developers.google.com)",
+      "WebFetch(domain:gtfs.org)",
+      "Bash(npx lattice:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

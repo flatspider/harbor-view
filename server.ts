@@ -4,6 +4,7 @@ import ViteExpress from "vite-express";
 import { WebSocket } from "ws";
 import postgres from "postgres";
 import type { AISMessage, ShipData } from "./src/types/ais";
+import { computeMoonPhase } from "./src/utils/moon";
 
 const PORT = Number(process.env.PORT ?? 5173);
 const AIS_STREAM_URL = "wss://stream.aisstream.io/v0/stream";
@@ -394,6 +395,46 @@ function connectUpstream() {
   });
 }
 
+async function getNoaaPortsSnapshot(): Promise<IntegrationSnapshot> {
+  try {
+    const baseUrl = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=latest&station=${NOAA_STATION_ID}&time_zone=gmt&units=metric&format=json`;
+    const [airTempRaw, waterTempRaw, pressureRaw, windRaw] = await Promise.all([
+      fetchJson(`${baseUrl}&product=air_temperature`),
+      fetchJson(`${baseUrl}&product=water_temperature`),
+      fetchJson(`${baseUrl}&product=air_pressure`),
+      fetchJson(`${baseUrl}&product=wind`),
+    ]);
+
+    const airTempData = asArray(ensureRecord(airTempRaw)?.data);
+    const waterTempData = asArray(ensureRecord(waterTempRaw)?.data);
+    const pressureData = asArray(ensureRecord(pressureRaw)?.data);
+    const windData = asArray(ensureRecord(windRaw)?.data);
+
+    const latestAirTemp = ensureRecord(airTempData[airTempData.length - 1]);
+    const latestWaterTemp = ensureRecord(waterTempData[waterTempData.length - 1]);
+    const latestPressure = ensureRecord(pressureData[pressureData.length - 1]);
+    const latestWind = ensureRecord(windData[windData.length - 1]);
+
+    return makeSnapshot("noaa-ports", "NOAA PORTS", "ok", {
+      stationId: NOAA_STATION_ID,
+      airTempC: asNumber(latestAirTemp?.v),
+      waterTempC: asNumber(latestWaterTemp?.v),
+      pressureHpa: asNumber(latestPressure?.v),
+      windSpeedMs: asNumber(latestWind?.s),
+      windDirectionDeg: asNumber(latestWind?.d),
+      windGustMs: asNumber(latestWind?.g),
+    });
+  } catch (error) {
+    return makeSnapshot(
+      "noaa-ports",
+      "NOAA PORTS",
+      "error",
+      { stationId: NOAA_STATION_ID },
+      error instanceof Error ? error.message : "Unable to fetch NOAA PORTS",
+    );
+  }
+}
+
 async function getNoaaCoopsSnapshot(): Promise<IntegrationSnapshot> {
   try {
     const [waterLevelRaw, predictionsRaw] = await Promise.all([
@@ -713,6 +754,16 @@ async function getOfacSnapshot(): Promise<IntegrationSnapshot> {
   }
 }
 
+function getMoonPhaseSnapshot(): IntegrationSnapshot {
+  const { phase, illumination, phaseName, isSpringTide } = computeMoonPhase(new Date());
+  return makeSnapshot("moon-phase", "Moon Phase", "ok", {
+    phase,
+    illumination,
+    phaseName,
+    isSpringTide,
+  });
+}
+
 async function refreshIntegrationSnapshots() {
   const now = Date.now();
   if (now - integrationsLastFetched < DATA_TTL_MS && integrationSnapshots.length > 0) {
@@ -726,6 +777,7 @@ async function refreshIntegrationSnapshots() {
 
   integrationsInFlight = (async () => {
     const next = await Promise.all([
+      getNoaaPortsSnapshot(),
       getNoaaCoopsSnapshot(),
       getNoaaCurrentsSnapshot(),
       getOpenMeteoSnapshot(),
@@ -735,6 +787,7 @@ async function refreshIntegrationSnapshots() {
       getPortWatchSnapshot(),
       getStormglassSnapshot(),
       getOfacSnapshot(),
+      Promise.resolve(getMoonPhaseSnapshot()),
     ]);
 
     integrationSnapshots = next;

@@ -50,14 +50,26 @@ export function animateAtmosphere(
     fog.near = 820;
     fog.far = 2300;
   }
-  fog.color.set(night ? "#1d2b3b" : mood === "overcast" ? "#8ea2b0" : "#a7c5d8");
+  // Pressure-driven fog density modulation
+  const pressureNorm = THREE.MathUtils.clamp((env.pressureHpa - 980) / 40, 0, 1);
+  const pressureFogScale = 0.7 + pressureNorm * 0.3;
+  fog.near *= pressureFogScale;
+  fog.far *= pressureFogScale;
+
+  if (night) {
+    const nightFogBase = new THREE.Color("#1d2b3b");
+    const nightFogMoon = new THREE.Color("#2a3d50");
+    fog.color.copy(nightFogBase).lerp(nightFogMoon, env.moonIllumination);
+  } else {
+    fog.color.set(mood === "overcast" ? "#8ea2b0" : "#a7c5d8");
+  }
   // backgroundColor kept in sync for fog edge matching (renderer clear color)
   backgroundColor.set(
     night ? "#203246" : mood === "rain" ? "#6f8ca1" : mood === "overcast" ? "#7ea2b8" : "#89b3cf",
   );
 
-  // Lighting
-  hemiLight.intensity = night ? 0.36 : mood === "overcast" ? 0.58 : 0.84;
+  // Lighting — moonlight modulates hemisphere intensity at night
+  hemiLight.intensity = night ? 0.36 + env.moonIllumination * 0.18 : mood === "overcast" ? 0.58 : 0.84;
   sunLight.intensity = night ? 0.22 : mood === "rain" ? 0.55 : 1.05;
 
   // Wind particles

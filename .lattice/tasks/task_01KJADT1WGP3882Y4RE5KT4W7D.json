@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-25T12:53:59Z",
+  "created_by": "agent:gpt5-codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-25T12:57:23Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJAE01VB4A7TMMFBXMFQ7WWP",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJADT1WGP3882Y4RE5KT4W7D",
+  "last_event_id": "ev_01KJAE09KSRWB3RTGT6FT2QXEB",
+  "last_status_changed_at": "2026-02-25T12:57:23Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-50",
+  "status": "done",
+  "tags": null,
+  "title": "Reboot vessel visuals and collision-safe placement",
+  "type": "task",
+  "updated_at": "2026-02-25T12:57:23Z",
+  "urgency": null
+}

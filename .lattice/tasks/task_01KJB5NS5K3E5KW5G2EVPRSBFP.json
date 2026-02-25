@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-25T19:51:05Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-25T19:55:43Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJB5Y61VKVB15TEPT9RCBWTA",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJB5NS5K3E5KW5G2EVPRSBFP",
+  "last_event_id": "ev_01KJB5Y8MHRC5FPWB4N1D4A32C",
+  "last_status_changed_at": "2026-02-25T19:55:43Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-52",
+  "status": "done",
+  "tags": null,
+  "title": "Roadmap: Ghibli transformation mode and radar loading screen",
+  "type": "task",
+  "updated_at": "2026-02-25T19:55:43Z",
+  "urgency": null
+}

@@ -79,10 +79,14 @@ Working Express backend (`server.ts`) relaying AISStream.io WebSocket data. Reac
 **Weeks 2-4:**
 - Painted background with masked ocean displacement animation
 - Ship type sprites (cargo, tanker, passenger, tug — distinct silhouettes)
+- Mode system foundation: instant visual toggle between Real Harbor and Studio Ghibli mode without reloading AIS data
+- Studio Ghibli mode sunrise ripple: left-to-right "sunrise" wave that transforms land, water, and UI palette into a magical seaside town look
+- Studio Ghibli mode vessel conversion: each AIS vessel class maps to a corresponding painted/cartoon ship sprite with heading-accurate motion
 - Wake trails behind moving ships (particle system or SVG trail)
 - Moored ship gentle bobbing animation
 - Day/night cycle based on actual time (warm golden hour, cool blue night)
 - Atmospheric effects (clouds drifting, fog, light shimmer on water)
+- Radar loading screen (phase 1): classic sonar/radar sweep shown during polygon and vessel hydration, with staged loading progress
 - Sound design: ocean ambiance, seagulls, subtle fog horn
 - Mobile-responsive layout
 - Deploy to Vercel (or Railway for the Express backend)
@@ -107,11 +111,14 @@ Working Express backend (`server.ts`) relaying AISStream.io WebSocket data. Reac
 **Goal:** Time travel. Show what happened yesterday, last week, last month.
 
 - **Replay system**: Timeline scrubber UI. Query stored positions by time range. Playback at 1x, 4x, 16x, 64x speed. Trail visualization showing vessel paths.
+- **Replay cinematic transform**: Optional "sunrise ripple" transition into Studio Ghibli mode before playback starts, then smooth return to real mode.
+- **Radar room mode**: Dedicated radar button opens a full-screen sonar interface with rotating sweep line and vessel contact blips driven by the same AIS feed.
+- **Replay/loading orchestration**: Heavy replay seeks and map rehydration route through the radar screen so waiting feels intentional, thematic, and informative.
 - **Port activity dashboard**: Daily vessel count by type, average anchorage duration, busiest hours, vessel arrivals/departures as time-series charts.
 - **Heatmap overlay**: Aggregate stored positions into grid cells. Toggle a traffic density heatmap.
 - **Basic API**: `GET /api/v1/vessels`, `GET /api/v1/vessels/:mmsi`, `GET /api/v1/vessels/:mmsi/track?start=&end=`. JSON responses. Public read-only, no auth yet.
 
-**Deliverable:** The first version a harbor master, marine journalist, or shipping enthusiast would bookmark and check daily.
+**Deliverable:** A replay-capable harbor intelligence tool with two signature experiences: cinematic Studio Ghibli transformation mode and a functional radar-room loading/view mode.
 
 ---
 

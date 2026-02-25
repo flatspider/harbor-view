@@ -69,6 +69,7 @@ const TILE_VARIANTS = 4;
 const EARTH_RADIUS_KM = 6371;
 const DEG_TO_RAD = Math.PI / 180;
 const WORLD_UNITS_PER_KM = 36;
+const WORLD_UNITS_PER_METER = WORLD_UNITS_PER_KM / 1000;
 
 function estimateNorthSouthDistanceKm(southLat: number, northLat: number): number {
   const deltaLat = Math.abs(northLat - southLat) * DEG_TO_RAD;
@@ -158,8 +159,8 @@ function isPointOnLand(lon: number, lat: number): boolean {
 }
 const HARBOR_LABELS: HarborLabel[] = [
   { id: "upper-bay", text: "Upper Bay", lat: 40.671, lon: -74.035, kind: "water", priority: 10, offsetY: -12 },
-  { id: "east-river", text: "East River", lat: 40.725, lon: -73.982, kind: "water", priority: 9, offsetX: 12, offsetY: -10 },
-  { id: "hudson", text: "Hudson", lat: 40.742, lon: -74.028, kind: "water", priority: 8, offsetX: -10 },
+  { id: "east-river", text: "East River", lat: 40.725, lon: -73.982, kind: "water", priority: 9, offsetX: 148, offsetY: -10 },
+  { id: "hudson", text: "Hudson", lat: 40.742, lon: -74.028, kind: "water", priority: 8, offsetX: 18 },
   { id: "narrows", text: "The Narrows", lat: 40.61, lon: -74.04, kind: "water", priority: 10, offsetY: -8 },
   { id: "liberty", text: "🗽", lat: 40.6892, lon: -74.0445, kind: "landmark", priority: 12, offsetY: -16, style: "emoji" },
   { id: "gov-island", text: "Governors Island", lat: 40.6897, lon: -74.0168, kind: "landmark", priority: 11, offsetY: -10 },
@@ -225,7 +226,7 @@ function moodFromForecast(summary: string): "clear" | "overcast" | "rain" | "fog
 }
 
 function createShipGeometry(category: string, sizeScale: number): THREE.BufferGeometry {
-  const scale = Math.max(sizeScale, 0.85);
+  const scale = Math.max(sizeScale, 0.22);
   const shape = new THREE.Shape();
 
   if (category === "cargo") {
@@ -282,22 +283,22 @@ function latLonToWorld(lat: number, lon: number): THREE.Vector3 {
   const latRange = NY_HARBOR_BOUNDS.north - NY_HARBOR_BOUNDS.south;
   const xNorm = (lon - NY_HARBOR_BOUNDS.west) / lonRange;
   const zNorm = (lat - NY_HARBOR_BOUNDS.south) / latRange;
-  const x = xNorm * WORLD_WIDTH - WORLD_WIDTH * 0.5;
+  // Mirror east/west so all scene elements share the same flipped orientation.
+  const x = WORLD_WIDTH * 0.5 - xNorm * WORLD_WIDTH;
   const z = zNorm * WORLD_DEPTH - WORLD_DEPTH * 0.5;
   return new THREE.Vector3(x, 6, z);
 }
 
 function lonLatToWorld2(lon: number, lat: number): THREE.Vector2 {
   const world = latLonToWorld(lat, lon);
-  // ShapeGeometry/ExtrudeGeometry are built in XY and later rotated into XZ,
-  // so invert here to keep north/south aligned with ship world coordinates.
+  // ShapeGeometry/ExtrudeGeometry are built in XY and later rotated into XZ.
   return new THREE.Vector2(world.x, -world.z);
 }
 
 function worldToLonLat(x: number, z: number): { lon: number; lat: number } | null {
   const halfWidth = WORLD_WIDTH * 0.5;
   const halfDepth = WORLD_DEPTH * 0.5;
-  const xNorm = (x + halfWidth) / WORLD_WIDTH;
+  const xNorm = (halfWidth - x) / WORLD_WIDTH;
   const zNorm = (z + halfDepth) / WORLD_DEPTH;
   if (xNorm < 0 || xNorm > 1 || zNorm < 0 || zNorm > 1) return null;
   const lon = NY_HARBOR_BOUNDS.west + xNorm * (NY_HARBOR_BOUNDS.east - NY_HARBOR_BOUNDS.west);
@@ -373,7 +374,7 @@ function createShipDetailMesh(category: ShipCategory, sizeScale: number, hullCol
     roughness: 0.5,
     metalness: 0.14,
   });
-  const scale = Math.max(sizeScale, 0.85);
+  const scale = Math.max(sizeScale, 0.22);
 
   if (category === "cargo") {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(5.4 * scale, 2.1 * scale, 8.5 * scale), detailMaterial);
@@ -399,6 +400,20 @@ function createShipDetailMesh(category: ShipCategory, sizeScale: number, hullCol
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(3.8 * scale, 1.8 * scale, 6.1 * scale), detailMaterial);
   mesh.position.set(0, 2.45 * scale, 0.4 * scale);
   return mesh;
+}
+
+function computeShipSizeScale(ship: ShipData, style: ShipCategoryStyle): number {
+  const lengthM = ship.lengthM > 0 ? ship.lengthM : 110;
+  const beamM = ship.beamM > 0 ? ship.beamM : 18;
+
+  // Hull templates are roughly ~22 units long and ~8 units wide at scale 1.
+  const targetLengthUnits = lengthM * WORLD_UNITS_PER_METER;
+  const targetBeamUnits = beamM * WORLD_UNITS_PER_METER;
+  const fromLength = targetLengthUnits / 22;
+  const fromBeam = targetBeamUnits / 8;
+  const blended = fromLength * 0.75 + fromBeam * 0.25;
+
+  return Math.min(Math.max(blended * style.scale, 0.22), 1.1);
 }
 
 interface GeoJsonFeatureCollection {
@@ -857,8 +872,9 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         marker.rotation.y = (-markerData.ship.heading * Math.PI) / 180;
         const wake = markerData.wake;
         wake.visible = isMoving && !isMoored;
-        wake.scale.x = markerData.wakeWidth * (0.58 + Math.min(markerData.ship.sog / 13, 1.05));
-        wake.scale.z = markerData.wakeLength * (0.72 + Math.min(markerData.ship.sog / 11, 1.24));
+        const wakeScaleBase = Math.max(markerData.sizeScale, 0.28);
+        wake.scale.x = markerData.wakeWidth * wakeScaleBase * (0.58 + Math.min(markerData.ship.sog / 13, 1.05));
+        wake.scale.z = markerData.wakeLength * wakeScaleBase * (0.72 + Math.min(markerData.ship.sog / 11, 1.24));
         wake.material.opacity = WAKE_BASE_OPACITY + Math.min(markerData.ship.sog / 55, 0.14);
       }
 
@@ -991,6 +1007,10 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     const scene = sceneInstanceRef.current;
     if (!scene) return;
     const shipsEffectStart = performance.now();
+    let skippedNoPosition = 0;
+    let fallbackPlacements = 0;
+    let createdMarkers = 0;
+    let updatedMarkers = 0;
 
     const nextShipIds = new Set<number>();
     const occupiedSlots: OccupiedSlot[] = [];
@@ -999,18 +1019,17 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     );
 
     for (const ship of orderedShips) {
-      if (ship.lat === 0 && ship.lon === 0) continue;
+      if (ship.lat === 0 && ship.lon === 0) {
+        skippedNoPosition += 1;
+        continue;
+      }
       const mmsi = ship.mmsi;
       const category = getShipCategory(ship.shipType);
       const style = CATEGORY_STYLES[category];
       const baseTarget = latLonToWorld(ship.lat, ship.lon);
       const radius = getShipCollisionRadius(ship, style);
       const existing = shipMarkersRef.current.get(mmsi);
-      const dimensionFactor = Math.min(
-        Math.max((ship.lengthM > 0 ? ship.lengthM / 180 : 0.8) + (ship.beamM > 0 ? ship.beamM / 70 : 0.3), 0.75),
-        2.3,
-      );
-      const nextSizeScale = style.scale * dimensionFactor;
+      const nextSizeScale = computeShipSizeScale(ship, style);
 
       if (existing) {
         const markerData = getShipMarkerData(existing);
@@ -1051,17 +1070,24 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
           const hitArea = existing.children.find((child) => child.name === "ship-hit-area");
           if (hitArea instanceof THREE.Mesh) {
             hitArea.geometry.dispose();
-            hitArea.geometry = new THREE.SphereGeometry((12 + Math.max(ship.lengthM / 20, 0)) * style.scale, 12, 12);
+            hitArea.geometry = new THREE.SphereGeometry(
+              Math.max(6, Math.min(24, (ship.lengthM > 0 ? ship.lengthM * WORLD_UNITS_PER_METER * 0.35 : 9))),
+              12,
+              12,
+            );
           }
         }
 
         nextShipIds.add(mmsi);
         occupiedSlots.push({ mmsi, radius, x: nextTarget.x, z: nextTarget.z });
+        updatedMarkers += 1;
         continue;
       }
 
       const resolvedTarget = resolveShipTarget(baseTarget, mmsi, radius, occupiedSlots);
-      if (!resolvedTarget) continue;
+      // Never drop valid AIS targets because placement fallback failed.
+      const spawnTarget = resolvedTarget ?? baseTarget;
+      if (!resolvedTarget) fallbackPlacements += 1;
 
       const hullGeometry = createShipGeometry(category, nextSizeScale);
       const hullColor = new THREE.Color(style.color);
@@ -1074,7 +1100,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         }),
       );
       hull.castShadow = true;
-      hull.position.copy(resolvedTarget);
+      hull.position.copy(spawnTarget);
       hull.position.y = SHIP_BASE_Y;
       hull.renderOrder = 5;
 
@@ -1100,7 +1126,11 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       hull.add(detail);
 
       const hitArea = new THREE.Mesh(
-        new THREE.SphereGeometry((12 + Math.max(ship.lengthM / 20, 0)) * style.scale, 12, 12),
+        new THREE.SphereGeometry(
+          Math.max(6, Math.min(24, (ship.lengthM > 0 ? ship.lengthM * WORLD_UNITS_PER_METER * 0.35 : 9))),
+          12,
+          12,
+        ),
         new THREE.MeshBasicMaterial({
           transparent: true,
           opacity: 0,
@@ -1114,7 +1144,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         isShipMarker: true,
         mmsi,
         ship,
-        target: resolvedTarget,
+        target: spawnTarget.clone(),
         wake,
         baseColor: hullColor.clone(),
         category,
@@ -1127,7 +1157,8 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       scene.add(hull);
       shipMarkersRef.current.set(mmsi, hull);
       nextShipIds.add(mmsi);
-      occupiedSlots.push({ mmsi, radius, x: resolvedTarget.x, z: resolvedTarget.z });
+      occupiedSlots.push({ mmsi, radius, x: spawnTarget.x, z: spawnTarget.z });
+      createdMarkers += 1;
     }
 
     for (const [mmsi, marker] of shipMarkersRef.current.entries()) {
@@ -1151,10 +1182,20 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     }
 
     const shipsEffectMs = performance.now() - shipsEffectStart;
-    if (PERF_DEBUG && shipsEffectMs > 16) {
-      console.debug("[perf] ship reconcile", {
-        ms: Number(shipsEffectMs.toFixed(2)),
-        ships: ships.size,
+    if (PERF_DEBUG) {
+      if (shipsEffectMs > 16) {
+        console.debug("[perf] ship reconcile", {
+          ms: Number(shipsEffectMs.toFixed(2)),
+          ships: ships.size,
+        });
+      }
+      console.debug("[perf] ship visibility", {
+        apiShips: ships.size,
+        renderedShips: nextShipIds.size,
+        skippedNoPosition,
+        createdMarkers,
+        updatedMarkers,
+        fallbackPlacements,
       });
     }
   }, [ships]);

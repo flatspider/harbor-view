@@ -121,9 +121,17 @@ interface ShipMarkerData {
   radius: number;
   wakeWidth: number;
   wakeLength: number;
+  sizeScale: number;
 }
 
 type ShipMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+
+interface WaterTile {
+  mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
+  positionAttr: THREE.BufferAttribute;
+  baseXZ: Float32Array;
+  lightnessOffset: number;
+}
 
 function getShipMarkerData(mesh: THREE.Object3D): ShipMarkerData {
   return mesh.userData as ShipMarkerData;
@@ -429,9 +437,11 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
   const hoveredShipRef = useRef<ShipMesh | null>(null);
   const animationRef = useRef<number | null>(null);
   const shipMarkersRef = useRef<Map<number, ShipMesh>>(new Map());
-  const tileRef = useRef<THREE.Mesh[]>([]);
+  const tileRef = useRef<WaterTile[]>([]);
   const windParticlesRef = useRef<THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> | null>(null);
   const coastlineObjectsRef = useRef<THREE.Object3D[]>([]);
+  const raycastTargetsRef = useRef<ShipMesh[]>([]);
+  const labelSizesRef = useRef(new Map<string, { width: number; height: number }>());
   const labelElementsRef = useRef(new Map<string, HTMLDivElement>());
   const environmentRef = useRef(environment);
   const [selectedShip, setSelectedShip] = useState<{
@@ -477,6 +487,11 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     const shipMarkers = shipMarkersRef.current;
     const tiles = tileRef.current;
     const coastlineObjects = coastlineObjectsRef.current;
+    const raycastTargets = raycastTargetsRef.current;
+    const labelSizes = labelSizesRef.current;
+    const abortController = new AbortController();
+    let disposed = false;
+    landPolygonRings.length = 0;
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#89b3cf");
@@ -567,30 +582,37 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         tile.position.set(x, 0, z);
         tile.receiveShadow = true;
         scene.add(tile);
-        tiles.push(tile);
+        const positionAttr = tile.geometry.attributes.position as THREE.BufferAttribute;
+        const baseXZ = new Float32Array(positionAttr.count * 2);
+        for (let i = 0; i < positionAttr.count; i += 1) {
+          baseXZ[i * 2] = positionAttr.getX(i);
+          baseXZ[i * 2 + 1] = positionAttr.getZ(i);
+        }
+        tiles.push({
+          mesh: tile,
+          positionAttr,
+          baseXZ,
+          lightnessOffset: (variant - (TILE_VARIANTS - 1) * 0.5) * 0.012,
+        });
       }
     }
 
     if (RENDER_LAND_POLYGONS) {
       void (async () => {
+        const fetchLand = async (path: string) => {
+          const response = await fetch(path, { signal: abortController.signal });
+          if (!response.ok) return null;
+          return (await response.json()) as GeoJsonFeatureCollection;
+        };
         try {
-          const response = await fetch("/assets/data/nyc-harbor-land.geojson");
-          if (!response.ok) return;
-          const geojson = (await response.json()) as GeoJsonFeatureCollection;
-          addGeoJsonLand(scene, geojson);
+          // Keep deterministic order so NYC visibly appears before NJ.
+          const nyc = await fetchLand("/assets/data/nyc-harbor-land.geojson");
+          if (!disposed && nyc) addGeoJsonLand(scene, nyc);
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+          const nj = await fetchLand("/assets/data/nj-land-polygons.geojson");
+          if (!disposed && nj) addGeoJsonLand(scene, nj);
         } catch {
           // Land polygons are optional.
-        }
-      })();
-
-      void (async () => {
-        try {
-          const response = await fetch("/assets/data/nj-land-polygons.geojson");
-          if (!response.ok) return;
-          const geojson = (await response.json()) as GeoJsonFeatureCollection;
-          addGeoJsonLand(scene, geojson);
-        } catch {
-          // NJ land polygons are optional.
         }
       })();
     }
@@ -634,8 +656,11 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       pointerRef.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
       raycasterRef.current.setFromCamera(pointerRef.current, cameraRef.current);
 
-      const markers = Array.from(shipMarkers.values());
-      const hits = raycasterRef.current.intersectObjects(markers, true);
+      raycastTargets.length = 0;
+      for (const marker of shipMarkers.values()) {
+        raycastTargets.push(marker);
+      }
+      const hits = raycasterRef.current.intersectObjects(raycastTargets, true);
       const hoveredMarker = hits.length > 0 ? getShipMarkerFromObject(hits[0].object) : null;
       const prevHovered = hoveredShipRef.current;
 
@@ -669,8 +694,11 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       pointerRef.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
       raycasterRef.current.setFromCamera(pointerRef.current, cameraRef.current);
 
-      const markers = Array.from(shipMarkers.values());
-      const hits = raycasterRef.current.intersectObjects(markers, true);
+      raycastTargets.length = 0;
+      for (const marker of shipMarkers.values()) {
+        raycastTargets.push(marker);
+      }
+      const hits = raycasterRef.current.intersectObjects(raycastTargets, true);
       if (hits.length === 0) {
         handleClose();
         return;
@@ -694,39 +722,52 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     mount.addEventListener("pointerup", handlePointerUp);
     mount.style.cursor = "grab";
 
+    const backgroundColor = new THREE.Color();
+    const now = performance.now();
+    let nextNightCheck = now;
+    let cachedNight = isNightTime();
+    let lastLabelLayoutAt = -Infinity;
+
     const animate = (time: number) => {
       if (!sceneInstanceRef.current || !cameraRef.current || !rendererRef.current) return;
       const t = time * 0.001;
       const env = environmentRef.current;
-      const night = isNightTime();
+      if (time >= nextNightCheck) {
+        cachedNight = isNightTime();
+        nextNightCheck = time + 30_000;
+      }
+      const night = cachedNight;
       const mood = moodFromForecast(env.forecastSummary);
       const waterTempNorm = Math.min(Math.max((env.seaSurfaceTempC - 2) / 22, 0), 1);
       const waveIntensity = Math.min(Math.max(env.waveHeightM / 2.2, 0.12), 1.9);
       const waveSpeed = 0.65 + waveIntensity * 1.45;
       const swellVec = degToVectorOnWater(env.swellDirectionDeg);
       const tideHeightOffset = Math.min(Math.max(env.tideLevelM * 1.3, -2.2), 2.4);
+      const waterHue = 0.56 - waterTempNorm * 0.06;
+      const waterSat = 0.48 + waterTempNorm * 0.12;
+      const waterLightBase = night ? 0.2 + waterTempNorm * 0.05 : 0.34 + waterTempNorm * 0.08;
 
       for (let i = 0; i < tiles.length; i += 1) {
         const tile = tiles[i];
-        const geom = tile.geometry as THREE.PlaneGeometry;
-        const attr = geom.attributes.position;
-        const material = tile.material as THREE.MeshStandardMaterial;
+        const attr = tile.positionAttr;
+        const positions = attr.array as Float32Array;
+        const material = tile.mesh.material;
         material.color.setHSL(
-          0.56 - waterTempNorm * 0.06,
-          0.48 + waterTempNorm * 0.12,
-          night ? 0.2 + waterTempNorm * 0.05 : 0.34 + waterTempNorm * 0.08,
+          waterHue,
+          waterSat,
+          waterLightBase + tile.lightnessOffset,
         );
 
-        for (let v = 0; v < attr.count; v += 1) {
-          const x = attr.getX(v);
-          const z = attr.getZ(v);
+        for (let v = 0, p = 0, b = 0; v < attr.count; v += 1, p += 3, b += 2) {
+          const x = tile.baseXZ[b];
+          const z = tile.baseXZ[b + 1];
           const swellAxis = x * swellVec.x + z * swellVec.y;
           const chopAxis = x * 0.55 - z * 0.35;
           const y =
             Math.sin((swellAxis * 0.05) + t * 1.9 * waveSpeed + i * 0.6) * 1.9 * waveIntensity +
             Math.cos((chopAxis * 0.08) - t * 3.1 * waveSpeed + i * 0.3) * 0.65 * waveIntensity +
             tideHeightOffset;
-          attr.setY(v, y);
+          positions[p + 1] = y;
         }
         attr.needsUpdate = true;
       }
@@ -743,9 +784,8 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         fog.far = 2300;
       }
       fog.color.set(night ? "#1d2b3b" : mood === "overcast" ? "#8ea2b0" : "#a7c5d8");
-      sceneInstanceRef.current.background = new THREE.Color(
-        night ? "#203246" : mood === "rain" ? "#6f8ca1" : mood === "overcast" ? "#7ea2b8" : "#89b3cf",
-      );
+      backgroundColor.set(night ? "#203246" : mood === "rain" ? "#6f8ca1" : mood === "overcast" ? "#7ea2b8" : "#89b3cf");
+      (sceneInstanceRef.current.background as THREE.Color).copy(backgroundColor);
       hemiLight.intensity = night ? 0.36 : mood === "overcast" ? 0.58 : 0.84;
       sunLight.intensity = night ? 0.22 : mood === "rain" ? 0.55 : 1.05;
 
@@ -783,54 +823,59 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
 
       controls.update();
 
-      const placedRects: Array<{ left: number; right: number; top: number; bottom: number }> = [];
-      const overlapPadding = 10;
-      const isOverlapping = (
-        a: { left: number; right: number; top: number; bottom: number },
-        b: { left: number; right: number; top: number; bottom: number },
-      ) =>
-        a.left - overlapPadding < b.right &&
-        a.right + overlapPadding > b.left &&
-        a.top - overlapPadding < b.bottom &&
-        a.bottom + overlapPadding > b.top;
+      if (time - lastLabelLayoutAt >= 120) {
+        const placedRects: Array<{ left: number; right: number; top: number; bottom: number }> = [];
+        const overlapPadding = 10;
+        const isOverlapping = (
+          a: { left: number; right: number; top: number; bottom: number },
+          b: { left: number; right: number; top: number; bottom: number },
+        ) =>
+          a.left - overlapPadding < b.right &&
+          a.right + overlapPadding > b.left &&
+          a.top - overlapPadding < b.bottom &&
+          a.bottom + overlapPadding > b.top;
 
-      const projectedLabels = HARBOR_LABELS
-        .map((label) => {
-          const el = labelElementsRef.current.get(label.id);
-          if (!el || !cameraRef.current || !sceneRef.current) return null;
-          const world = latLonToWorld(label.lat, label.lon);
-          world.y = 8;
-          const projected = world.project(cameraRef.current);
-          const visible = projected.z < 1 && projected.z > -1;
-          if (!visible) return { label, el, visible: false, x: 0, y: 0 };
-          const x = ((projected.x + 1) * 0.5) * sceneRef.current.clientWidth + (label.offsetX ?? 0);
-          const y = ((-projected.y + 1) * 0.5) * sceneRef.current.clientHeight + (label.offsetY ?? 0);
-          return { label, el, visible: true, x, y };
-        })
-        .filter((entry): entry is NonNullable<typeof entry> => entry != null)
-        .sort((a, b) => b.label.priority - a.label.priority);
+        const projectedLabels = HARBOR_LABELS
+          .map((label) => {
+            const el = labelElementsRef.current.get(label.id);
+            if (!el || !cameraRef.current || !sceneRef.current) return null;
+            const world = latLonToWorld(label.lat, label.lon);
+            world.y = 8;
+            const projected = world.project(cameraRef.current);
+            const visible = projected.z < 1 && projected.z > -1;
+            if (!visible) return { label, el, visible: false, x: 0, y: 0 };
+            const x = ((projected.x + 1) * 0.5) * sceneRef.current.clientWidth + (label.offsetX ?? 0);
+            const y = ((-projected.y + 1) * 0.5) * sceneRef.current.clientHeight + (label.offsetY ?? 0);
+            return { label, el, visible: true, x, y };
+          })
+          .filter((entry): entry is NonNullable<typeof entry> => entry != null)
+          .sort((a, b) => b.label.priority - a.label.priority);
 
-      for (const entry of projectedLabels) {
-        const { el, x, y, visible } = entry;
-        if (!visible) {
-          el.style.opacity = "0";
-          continue;
+        for (const entry of projectedLabels) {
+          const { label, el, x, y, visible } = entry;
+          if (!visible) {
+            el.style.opacity = "0";
+            continue;
+          }
+          const cachedSize = labelSizes.get(label.id);
+          const width = cachedSize?.width ?? (el.offsetWidth || 100);
+          const height = cachedSize?.height ?? (el.offsetHeight || 20);
+          labelSizes.set(label.id, { width, height });
+          const rect = {
+            left: x - width * 0.5,
+            right: x + width * 0.5,
+            top: y - height * 0.5,
+            bottom: y + height * 0.5,
+          };
+          if (placedRects.some((placed) => isOverlapping(rect, placed))) {
+            el.style.opacity = "0";
+            continue;
+          }
+          placedRects.push(rect);
+          el.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
+          el.style.opacity = "1";
         }
-        const width = el.offsetWidth || 100;
-        const height = el.offsetHeight || 20;
-        const rect = {
-          left: x - width * 0.5,
-          right: x + width * 0.5,
-          top: y - height * 0.5,
-          bottom: y + height * 0.5,
-        };
-        if (placedRects.some((placed) => isOverlapping(rect, placed))) {
-          el.style.opacity = "0";
-          continue;
-        }
-        placedRects.push(rect);
-        el.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
-        el.style.opacity = "1";
+        lastLabelLayoutAt = time;
       }
 
       rendererRef.current.render(sceneInstanceRef.current, cameraRef.current);
@@ -867,6 +912,13 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         mount.removeChild(renderer.domElement);
       }
       shipMarkers.clear();
+      raycastTargets.length = 0;
+      labelSizes.clear();
+      for (const tile of tiles) {
+        scene.remove(tile.mesh);
+        tile.mesh.geometry.dispose();
+        tile.mesh.material.dispose();
+      }
       tiles.length = 0;
       for (const object of coastlineObjects) {
         scene.remove(object);
@@ -875,6 +927,9 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         }
       }
       coastlineObjects.length = 0;
+      disposed = true;
+      abortController.abort();
+      landPolygonRings.length = 0;
     };
   }, [handleClose, handleShipClick]);
 
@@ -897,6 +952,11 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       const radius = getShipCollisionRadius(ship, style);
       const resolvedTarget = resolveShipTarget(baseTarget, mmsi, radius, occupiedSlots);
       const existing = shipMarkersRef.current.get(mmsi);
+      const dimensionFactor = Math.min(
+        Math.max((ship.lengthM > 0 ? ship.lengthM / 180 : 0.8) + (ship.beamM > 0 ? ship.beamM / 70 : 0.3), 0.75),
+        2.3,
+      );
+      const nextSizeScale = style.scale * dimensionFactor;
 
       if (existing) {
         const markerData = getShipMarkerData(existing);
@@ -905,14 +965,14 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         const nextTarget = resolvedTarget ?? markerData.target;
         markerData.target.copy(nextTarget);
 
-        if (markerData.category !== category) {
+        const needsGeometryRefresh =
+          markerData.category !== category || Math.abs(markerData.sizeScale - nextSizeScale) > 0.04;
+
+        if (needsGeometryRefresh) {
           markerData.category = category;
-          const dimensionFactor = Math.min(
-            Math.max((ship.lengthM > 0 ? ship.lengthM / 180 : 0.8) + (ship.beamM > 0 ? ship.beamM / 70 : 0.3), 0.75),
-            2.3,
-          );
+          markerData.sizeScale = nextSizeScale;
           existing.geometry.dispose();
-          existing.geometry = createShipGeometry(category, style.scale * dimensionFactor);
+          existing.geometry = createShipGeometry(category, nextSizeScale);
         }
 
         const nextColor = new THREE.Color(style.color);
@@ -921,24 +981,22 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         markerData.wakeWidth = style.wakeWidth;
         markerData.wakeLength = style.wakeLength;
 
-        const detail = existing.children.find((child) => child.name === "ship-detail");
-        if (detail instanceof THREE.Mesh) {
-          if (detail.material instanceof THREE.Material) detail.material.dispose();
-          detail.geometry.dispose();
-          const dimensionFactor = Math.min(
-            Math.max((ship.lengthM > 0 ? ship.lengthM / 180 : 0.8) + (ship.beamM > 0 ? ship.beamM / 70 : 0.3), 0.75),
-            2.3,
-          );
-          const nextDetail = createShipDetailMesh(category, style.scale * dimensionFactor, nextColor);
-          nextDetail.name = "ship-detail";
-          existing.remove(detail);
-          existing.add(nextDetail);
-        }
+        if (needsGeometryRefresh) {
+          const detail = existing.children.find((child) => child.name === "ship-detail");
+          if (detail instanceof THREE.Mesh) {
+            if (detail.material instanceof THREE.Material) detail.material.dispose();
+            detail.geometry.dispose();
+            const nextDetail = createShipDetailMesh(category, nextSizeScale, nextColor);
+            nextDetail.name = "ship-detail";
+            existing.remove(detail);
+            existing.add(nextDetail);
+          }
 
-        const hitArea = existing.children.find((child) => child.name === "ship-hit-area");
-        if (hitArea instanceof THREE.Mesh) {
-          hitArea.geometry.dispose();
-          hitArea.geometry = new THREE.SphereGeometry((12 + Math.max(ship.lengthM / 20, 0)) * style.scale, 12, 12);
+          const hitArea = existing.children.find((child) => child.name === "ship-hit-area");
+          if (hitArea instanceof THREE.Mesh) {
+            hitArea.geometry.dispose();
+            hitArea.geometry = new THREE.SphereGeometry((12 + Math.max(ship.lengthM / 20, 0)) * style.scale, 12, 12);
+          }
         }
 
         nextShipIds.add(mmsi);
@@ -948,11 +1006,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
 
       if (!resolvedTarget) continue;
 
-      const dimensionFactor = Math.min(
-        Math.max((ship.lengthM > 0 ? ship.lengthM / 180 : 0.8) + (ship.beamM > 0 ? ship.beamM / 70 : 0.3), 0.75),
-        2.3,
-      );
-      const hullGeometry = createShipGeometry(category, style.scale * dimensionFactor);
+      const hullGeometry = createShipGeometry(category, nextSizeScale);
       const hullColor = new THREE.Color(style.color);
       const hull = new THREE.Mesh(
         hullGeometry,
@@ -984,7 +1038,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       wake.renderOrder = 4;
       hull.add(wake);
 
-      const detail = createShipDetailMesh(category, style.scale * dimensionFactor, hullColor);
+      const detail = createShipDetailMesh(category, nextSizeScale, hullColor);
       detail.name = "ship-detail";
       hull.add(detail);
 
@@ -1010,6 +1064,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         radius,
         wakeWidth: style.wakeWidth,
         wakeLength: style.wakeLength,
+        sizeScale: nextSizeScale,
       } as ShipMarkerData;
 
       scene.add(hull);

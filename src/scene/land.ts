@@ -77,11 +77,13 @@ function polygonRingsToShape(rings: number[][][]): THREE.Shape | null {
 
 function addGeoJsonLand(scene: THREE.Scene, data: GeoJsonFeatureCollection): boolean {
   const landMaterial = new THREE.MeshStandardMaterial({
-    color: "#6b8f4a",
-    roughness: 0.95,
-    metalness: 0.02,
+    color: "#6aad38",
+    emissive: "#3a7a1e",
+    emissiveIntensity: 0.6,
+    roughness: 0.85,
+    metalness: 0.0,
   });
-  const edgeMaterial = new THREE.LineBasicMaterial({ color: "#a8c87a", transparent: true, opacity: 0.8 });
+  const edgeMaterial = new THREE.LineBasicMaterial({ color: "#3a5a28", transparent: true, opacity: 0.85 });
 
   let added = false;
 

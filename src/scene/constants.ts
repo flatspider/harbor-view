@@ -129,6 +129,8 @@ export interface ShipMarkerData {
   wakeWidth: number;
   wakeLength: number;
   sizeScale: number;
+  boundaryScale: number;
+  hiddenByBoundary: boolean;
 }
 
 export type ShipMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;

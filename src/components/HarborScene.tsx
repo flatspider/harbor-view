@@ -40,6 +40,7 @@ import {
   getFerryRouteData,
   type FerryRouteInfo,
 } from "../scene/ferryRoutes";
+import { loadShipCategoryTextures, type ShipCategoryTextureMap } from "../scene/shipTextures";
 
 interface HarborSceneProps {
   ships: Map<number, ShipData>;
@@ -92,6 +93,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
   const backgroundColorRef = useRef(new THREE.Color());
   const skyMeshRef = useRef<THREE.Mesh | null>(null);
   const environmentRef = useRef(environment);
+  const shipCategoryTexturesRef = useRef<ShipCategoryTextureMap | null>(null);
   const [skyAutoMode, setSkyAutoMode] = useState(true);
   const [skyPanelOpen, setSkyPanelOpen] = useState(false);
   const [manualSkySettings, setManualSkySettings] = useState<SkySettings>(() => getDefaultSkySettings());
@@ -227,7 +229,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     hemiLightRef.current = hemiLight;
 
     const sunLight = new THREE.DirectionalLight("#ffb347", 1.3);
-    sunLight.position.set(-500, 180, 400);
+    sunLight.position.set(-500, 350, 400);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 1024;
     sunLight.shadow.mapSize.height = 1024;
@@ -241,6 +243,17 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     windParticlesRef.current = windParticles;
 
     void (async () => {
+      if (!shipCategoryTexturesRef.current) {
+        try {
+          const textures = await loadShipCategoryTextures();
+          if (!abortController.signal.aborted) {
+            shipCategoryTexturesRef.current = textures;
+          }
+        } catch (error) {
+          // eslint-disable-next-line no-console
+          console.error("[harbor] Failed to load ship category textures", error);
+        }
+      }
       if (RENDER_LAND_POLYGONS) {
         await loadLandPolygons(scene, abortController.signal);
       }
@@ -481,7 +494,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
   useEffect(() => {
     const scene = sceneInstanceRef.current;
     if (!scene) return;
-    reconcileShips(scene, ships, shipMarkersRef.current, hoveredShipRef);
+    reconcileShips(scene, ships, shipMarkersRef.current, hoveredShipRef, shipCategoryTexturesRef.current ?? undefined);
   }, [ships]);
 
   /* ── Render ────────────────────────────────────────────────────────── */

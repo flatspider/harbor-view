@@ -2,6 +2,20 @@ import * as THREE from "three";
 import type { HarborEnvironment } from "../types/environment";
 import { WORLD_WIDTH, WORLD_DEPTH, degToVectorOnWater, moodFromForecast } from "./constants";
 
+const BASE_FOG_DENSITY = 0.00018;
+const CLEAR_DAY_FOG = new THREE.Color("#c8c2d5");
+const OVERCAST_DAY_FOG = new THREE.Color("#b4afc0");
+const RAIN_DAY_BACKGROUND = new THREE.Color("#9898ab");
+const NIGHT_FOG_BASE = new THREE.Color("#1a2434");
+const NIGHT_FOG_MOON = new THREE.Color("#28364a");
+
+const DAY_HEMI_SKY = new THREE.Color("#ddd8e8");
+const DAY_HEMI_GROUND = new THREE.Color("#3a3548");
+const DAY_SUN_COLOR = new THREE.Color("#ffd699");
+const NIGHT_HEMI_SKY = new THREE.Color("#8ea2c4");
+const NIGHT_HEMI_GROUND = new THREE.Color("#1f2533");
+const NIGHT_SUN_COLOR = new THREE.Color("#9caec9");
+
 /** Create wind particle system. */
 export function createWindParticles(scene: THREE.Scene): THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> {
   const count = 450;
@@ -39,42 +53,43 @@ export function animateAtmosphere(
 ): void {
   const mood = moodFromForecast(env.forecastSummary);
 
-  // Fog
-  const fog = scene.fog as THREE.Fog;
-  if (mood === "fog") {
-    fog.near = 350;
-    fog.far = 1200;
-  } else if (mood === "rain") {
-    fog.near = 650;
-    fog.far = 1700;
-  } else {
-    fog.near = 820;
-    fog.far = 2300;
-  }
-  // Pressure-driven fog density modulation
+  // Fog — exponential, deepens naturally with distance
+  const fog = scene.fog as THREE.FogExp2;
+  const baseDensity =
+    mood === "fog" ? BASE_FOG_DENSITY * 2.5 : mood === "rain" ? BASE_FOG_DENSITY * 1.5 : BASE_FOG_DENSITY;
   const pressureNorm = THREE.MathUtils.clamp((env.pressureHpa - 980) / 40, 0, 1);
-  const pressureFogScale = 0.7 + pressureNorm * 0.3;
-  fog.near *= pressureFogScale;
-  fog.far *= pressureFogScale;
-  const minFogFar = cameraDistance * 1.35 + 260;
-  fog.far = Math.max(fog.far, minFogFar);
-  fog.near = Math.min(fog.near, fog.far * 0.7);
+  const zoomNorm = THREE.MathUtils.clamp((cameraDistance - 350) / (WORLD_DEPTH * 0.75), 0, 1);
+  const cameraFogBoost = THREE.MathUtils.lerp(0.96, 1.08, zoomNorm);
+  fog.density = baseDensity * (1.3 - pressureNorm * 0.3) * cameraFogBoost;
 
   if (night) {
-    const nightFogBase = new THREE.Color("#1d2b3b");
-    const nightFogMoon = new THREE.Color("#2a3d50");
-    fog.color.copy(nightFogBase).lerp(nightFogMoon, env.moonIllumination);
+    fog.color.copy(NIGHT_FOG_BASE).lerp(NIGHT_FOG_MOON, env.moonIllumination);
   } else {
-    fog.color.set(mood === "overcast" ? "#8ea2b0" : "#a7c5d8");
+    fog.color.copy(mood === "overcast" ? OVERCAST_DAY_FOG : CLEAR_DAY_FOG);
   }
+
   // backgroundColor kept in sync for fog edge matching (renderer clear color)
-  backgroundColor.set(
-    night ? "#203246" : mood === "rain" ? "#6f8ca1" : mood === "overcast" ? "#7ea2b8" : "#89b3cf",
-  );
+  if (night) {
+    backgroundColor.copy(NIGHT_FOG_BASE);
+  } else if (mood === "rain") {
+    backgroundColor.copy(RAIN_DAY_BACKGROUND);
+  } else {
+    backgroundColor.copy(fog.color);
+  }
+
+  if (night) {
+    hemiLight.color.copy(NIGHT_HEMI_SKY);
+    hemiLight.groundColor.copy(NIGHT_HEMI_GROUND);
+    sunLight.color.copy(NIGHT_SUN_COLOR);
+  } else {
+    hemiLight.color.copy(DAY_HEMI_SKY);
+    hemiLight.groundColor.copy(DAY_HEMI_GROUND);
+    sunLight.color.copy(DAY_SUN_COLOR);
+  }
 
   // Lighting — moonlight modulates hemisphere intensity at night
-  hemiLight.intensity = night ? 0.36 + env.moonIllumination * 0.18 : mood === "overcast" ? 0.58 : 0.84;
-  sunLight.intensity = night ? 0.22 : mood === "rain" ? 0.55 : 1.3;
+  hemiLight.intensity = night ? 0.34 + env.moonIllumination * 0.16 : mood === "overcast" ? 0.76 : 0.92;
+  sunLight.intensity = night ? 0.2 : mood === "rain" ? 0.45 : mood === "overcast" ? 0.82 : 1.25;
 
   // Wind particles
   if (windParticles) {

@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { MapControls } from "three/examples/jsm/controls/MapControls.js";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import type { ShipData } from "../types/ais";
 import type { HarborEnvironment } from "../types/environment";
 import { ShipInfoCard } from "./ShipInfoCard";
 import { FerryRouteInfoCard } from "./FerryRouteInfoCard";
+import { GhibliEdgeShader } from "../scene/ghibliEdgeShader";
+import { GhibliColorShader } from "../scene/ghibliColorShader";
 
 // Scene layer modules
 import {
@@ -41,6 +48,7 @@ import {
   type FerryRouteInfo,
 } from "../scene/ferryRoutes";
 import { loadShipCategoryTextures, type ShipCategoryTextureMap } from "../scene/shipTextures";
+import { loadPassengerFerryPrototype } from "../scene/passengerFerryModel";
 
 interface HarborSceneProps {
   ships: Map<number, ShipData>;
@@ -73,6 +81,8 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
   const sceneInstanceRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const composerRef = useRef<EffectComposer | null>(null);
+  const edgePassRef = useRef<ShaderPass | null>(null);
   const controlsRef = useRef<MapControls | null>(null);
   const raycasterRef = useRef(new THREE.Raycaster());
   const pointerRef = useRef(new THREE.Vector2());
@@ -80,6 +90,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
   const hoveredShipRef = useRef<ShipMesh | null>(null);
   const hoveredFerryRef = useRef<THREE.Line | null>(null);
   const animationRef = useRef<number | null>(null);
+  const frameLoopTokenRef = useRef(0);
   const shipMarkersRef = useRef<Map<number, ShipMesh>>(new Map());
   const ferryRouteTargetsRef = useRef<THREE.Line[]>([]);
   const tileRef = useRef<WaterTile[]>([]);
@@ -94,6 +105,8 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
   const skyMeshRef = useRef<THREE.Mesh | null>(null);
   const environmentRef = useRef(environment);
   const shipCategoryTexturesRef = useRef<ShipCategoryTextureMap | null>(null);
+  const passengerFerryPrototypeRef = useRef<THREE.Object3D | null>(null);
+  const [shipVisualAssetsRevision, setShipVisualAssetsRevision] = useState(0);
   const [skyAutoMode, setSkyAutoMode] = useState(true);
   const [skyPanelOpen, setSkyPanelOpen] = useState(false);
   const [manualSkySettings, setManualSkySettings] = useState<SkySettings>(() => getDefaultSkySettings());
@@ -184,8 +197,8 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
 
     // Scene
     const scene = new THREE.Scene();
-    // Scene background is handled via renderer clear color in the animation loop.
-    scene.fog = new THREE.Fog("#a7c5d8", 800, 2200);
+    scene.background = new THREE.Color("#c8c2d5");
+    scene.fog = new THREE.FogExp2("#c8c2d5", 0.00018);
     sceneInstanceRef.current = scene;
 
     // Camera
@@ -198,13 +211,42 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
-    renderer.setClearColor("#89b3cf", 1);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.62;
+    renderer.toneMappingExposure = 0.82;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.autoClear = true;
     mount.appendChild(renderer.domElement);
     rendererRef.current = renderer;
+
+    // Post-processing pipeline (Ghibli cel-shading)
+    const composer = new EffectComposer(renderer);
+    composer.setPixelRatio(renderer.getPixelRatio());
+    composer.addPass(new RenderPass(scene, camera));
+
+    const edgePass = new ShaderPass(GhibliEdgeShader);
+    edgePass.uniforms.resolution.value.set(
+      mount.clientWidth * renderer.getPixelRatio(),
+      mount.clientHeight * renderer.getPixelRatio(),
+    );
+    edgePass.uniforms.edgeStrength.value = 0.9;
+    edgePass.uniforms.edgeThreshold.value = 0.14;
+    composer.addPass(edgePass);
+    edgePassRef.current = edgePass;
+
+    const colorPass = new ShaderPass(GhibliColorShader);
+    composer.addPass(colorPass);
+
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(mount.clientWidth, mount.clientHeight),
+      0.08,
+      0.4,
+      0.92,
+    );
+    composer.addPass(bloomPass);
+
+    composer.addPass(new OutputPass());
+    composerRef.current = composer;
 
     // Controls
     const worldMaxSpan = Math.max(WORLD_WIDTH, WORLD_DEPTH);
@@ -222,14 +264,14 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     controls.update();
     controlsRef.current = controls;
 
-    // Lighting
-    const hemiLight = new THREE.HemisphereLight("#d9eef8", "#8b6d4a", 0.85);
+    // Lighting — warm sun from southwest, purple-tinted ambient
+    const hemiLight = new THREE.HemisphereLight("#ddd8e8", "#3a3548", 0.85);
     hemiLight.position.set(0, 600, 0);
     scene.add(hemiLight);
     hemiLightRef.current = hemiLight;
 
-    const sunLight = new THREE.DirectionalLight("#ffb347", 1.3);
-    sunLight.position.set(-500, 350, 400);
+    const sunLight = new THREE.DirectionalLight("#ffe0b2", 1.2);
+    sunLight.position.set(-400, 300, -350); // southwest
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 1024;
     sunLight.shadow.mapSize.height = 1024;
@@ -243,16 +285,31 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     windParticlesRef.current = windParticles;
 
     void (async () => {
+      let visualAssetsUpdated = false;
       if (!shipCategoryTexturesRef.current) {
         try {
           const textures = await loadShipCategoryTextures();
           if (!abortController.signal.aborted) {
             shipCategoryTexturesRef.current = textures;
+            visualAssetsUpdated = true;
           }
         } catch (error) {
-          // eslint-disable-next-line no-console
           console.error("[harbor] Failed to load ship category textures", error);
         }
+      }
+      if (!passengerFerryPrototypeRef.current) {
+        try {
+          const prototype = await loadPassengerFerryPrototype();
+          if (!abortController.signal.aborted) {
+            passengerFerryPrototypeRef.current = prototype;
+            visualAssetsUpdated = true;
+          }
+        } catch (error) {
+          console.error("[harbor] Failed to load passenger ferry model", error);
+        }
+      }
+      if (visualAssetsUpdated && !abortController.signal.aborted) {
+        setShipVisualAssetsRevision((prev) => prev + 1);
       }
       if (RENDER_LAND_POLYGONS) {
         await loadLandPolygons(scene, abortController.signal);
@@ -277,9 +334,18 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       const width = sceneRef.current.clientWidth;
       const height = sceneRef.current.clientHeight;
       if (width === 0 || height === 0) return;
+      const pixelRatio = Math.min(window.devicePixelRatio, 2);
+      rendererRef.current.setPixelRatio(pixelRatio);
       cameraRef.current.aspect = width / height;
       cameraRef.current.updateProjectionMatrix();
       rendererRef.current.setSize(width, height);
+      if (composerRef.current) {
+        composerRef.current.setPixelRatio(pixelRatio);
+        composerRef.current.setSize(width, height);
+      }
+      if (edgePassRef.current) {
+        edgePassRef.current.uniforms.resolution.value.set(width * pixelRatio, height * pixelRatio);
+      }
     };
     const resizeObserver = new ResizeObserver(() => handleResize());
     resizeObserver.observe(mount);
@@ -391,8 +457,11 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     // Animation loop
     let nextNightCheck = performance.now();
     let cachedNight = isNightTime();
+    const loopToken = frameLoopTokenRef.current + 1;
+    frameLoopTokenRef.current = loopToken;
 
     const animate = (time: number) => {
+      if (frameLoopTokenRef.current !== loopToken) return;
       if (!sceneInstanceRef.current || !cameraRef.current || !rendererRef.current) return;
       const t = time * 0.001;
       const env = environmentRef.current;
@@ -414,7 +483,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         cachedNight,
         cameraDistance,
       );
-      rendererRef.current.setClearColor(backgroundColorRef.current, 1);
+      sceneInstanceRef.current.background = backgroundColorRef.current;
       if (skyMeshRef.current) {
         const appliedSky = animateSky(
           skyMeshRef.current,
@@ -438,8 +507,14 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         projectLabels(cameraRef.current, sceneRef.current, labelElementsRef.current, labelSizes);
       }
 
-      rendererRef.current.render(sceneInstanceRef.current, cameraRef.current);
-      animationRef.current = requestAnimationFrame(animate);
+      if (composerRef.current) {
+        composerRef.current.render();
+      } else {
+        rendererRef.current.render(sceneInstanceRef.current, cameraRef.current);
+      }
+      if (frameLoopTokenRef.current === loopToken) {
+        animationRef.current = requestAnimationFrame(animate);
+      }
     };
     animationRef.current = requestAnimationFrame(animate);
 
@@ -450,7 +525,9 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       mount.removeEventListener("pointerdown", handlePointerDown);
       mount.removeEventListener("pointermove", handlePointerMove);
       mount.removeEventListener("pointerup", handlePointerUp);
+      frameLoopTokenRef.current += 1;
       if (animationRef.current != null) cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
       mount.style.cursor = "";
       const hovered = hoveredShipRef.current;
       if (hovered) {
@@ -471,8 +548,17 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         disposeSkyBackdrop(scene, skyMeshRef.current);
         skyMeshRef.current = null;
       }
+      if (composerRef.current) {
+        composerRef.current.renderTarget1.dispose();
+        composerRef.current.renderTarget2.dispose();
+        composerRef.current = null;
+      }
+      edgePassRef.current = null;
       renderer.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
+      rendererRef.current = null;
+      cameraRef.current = null;
+      sceneInstanceRef.current = null;
       shipMarkers.clear();
       raycastTargets.length = 0;
       ferryRouteTargets.length = 0;
@@ -494,8 +580,15 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
   useEffect(() => {
     const scene = sceneInstanceRef.current;
     if (!scene) return;
-    reconcileShips(scene, ships, shipMarkersRef.current, hoveredShipRef, shipCategoryTexturesRef.current ?? undefined);
-  }, [ships]);
+    reconcileShips(
+      scene,
+      ships,
+      shipMarkersRef.current,
+      hoveredShipRef,
+      shipCategoryTexturesRef.current ?? undefined,
+      passengerFerryPrototypeRef.current ?? undefined,
+    );
+  }, [ships, shipVisualAssetsRevision]);
 
   /* ── Render ────────────────────────────────────────────────────────── */
 

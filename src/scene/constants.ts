@@ -134,7 +134,7 @@ export interface ShipMarkerData {
   hiddenByBoundary: boolean;
 }
 
-export type ShipMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+export type ShipMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshToonMaterial>;
 
 export interface WaterTile {
   mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;

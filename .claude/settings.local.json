@@ -52,7 +52,12 @@
       "WebFetch(domain:gtfs.org)",
       "Bash(npx lattice:*)",
       "Bash(node:*)",
-      "WebFetch(domain:cannoneyed.com)"
+      "WebFetch(domain:cannoneyed.com)",
+      "Bash(lattice branch-link:*)",
+      "mcp__playwright__browser_console_messages",
+      "mcp__playwright__browser_evaluate",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_run_code"
     ]
   },
   "enableAllProjectMcpServers": true,

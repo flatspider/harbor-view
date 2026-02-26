@@ -45,6 +45,7 @@ interface WaterBounds {
 const shaderTiles: ShaderWaterTile[] = [];
 const currentArrowSamples: CurrentArrowSample[] = [];
 const currentArrowGroup = new THREE.Group();
+let _resinBacking: THREE.Mesh | null = null;
 
 const _sunDirection = new THREE.Vector3();
 const _waterColor = new THREE.Color();
@@ -63,6 +64,7 @@ let _waterShaderTime = 0;
 
 const WATER_NORMALS_URL = "https://threejs.org/examples/textures/waternormals.jpg";
 const WATER_SURFACE_Y = -1;
+const WATER_RESIN_DEPTH = 1.8;
 const LAND_MASK_DEPTH = 2.2;
 const LAND_MASK_POLL_SECONDS = 1.2;
 const CURRENT_ARROW_SPACING = 170;
@@ -82,6 +84,10 @@ const FORCE_TEST_CURRENT = true;
 const FORCED_CURRENT_KNOTS = 15;
 const FORCED_CURRENT_DIRECTION_DEG = 0;
 const UV_DRIFT_PER_KNOT = 0.00135;
+const DAY_WATER_SUN_DIRECTION = new THREE.Vector3(-400, 300, -350).normalize();
+const NIGHT_WATER_SUN_DIRECTION = new THREE.Vector3(-220, 260, -180).normalize();
+const DAY_WATER_SUN_COLOR = "#ffe0b2";
+const NIGHT_WATER_SUN_COLOR = "#9caec9";
 
 function createWaterNormalsTexture(): THREE.Texture {
   const texture = new THREE.TextureLoader().load(WATER_NORMALS_URL);
@@ -254,7 +260,7 @@ function createCurrentArrows(scene: THREE.Scene, minX: number, maxX: number, min
   currentArrowGroup.clear();
   currentArrowGroup.renderOrder = 10;
 
-  const arrowColor = new THREE.Color("#a4d9ff");
+  const arrowColor = new THREE.Color("#E77B5A");
 
   for (let x = minX + CURRENT_ARROW_SPACING * 0.5; x < maxX; x += CURRENT_ARROW_SPACING) {
     for (let z = minZ + CURRENT_ARROW_SPACING * 0.5; z < maxZ; z += CURRENT_ARROW_SPACING) {
@@ -317,16 +323,7 @@ function animateCurrentArrows(env: HarborEnvironment, t: number): void {
 }
 
 function getSunDirection(night: boolean): THREE.Vector3 {
-  const now = new Date();
-  const hours = now.getHours() + now.getMinutes() / 60;
-  const daylightT = THREE.MathUtils.clamp((hours - 6) / 12, 0, 1);
-
-  const elevation = night ? -4 : 6 + Math.sin(daylightT * Math.PI) * 58;
-  const azimuth = 180 + (daylightT - 0.5) * 130;
-
-  const phi = THREE.MathUtils.degToRad(90 - elevation);
-  const theta = THREE.MathUtils.degToRad(azimuth);
-  return _sunDirection.setFromSphericalCoords(1, phi, theta).normalize();
+  return _sunDirection.copy(night ? NIGHT_WATER_SUN_DIRECTION : DAY_WATER_SUN_DIRECTION);
 }
 
 function getWaterUniforms(mesh: Water): WaterUniforms | null {
@@ -375,16 +372,34 @@ export function createWaterTiles(scene: THREE.Scene): WaterTile[] {
   const geometry = new THREE.PlaneGeometry(width, depth, segmentsX, segmentsZ);
   const normalTexture = createWaterNormalsTexture();
 
+  // ── Resin backing: dark plane beneath the water for depth ──
+  const resinBacking = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, depth),
+    new THREE.MeshStandardMaterial({
+      color: "#1a3d4a",
+      emissive: "#0d1e26",
+      emissiveIntensity: 0.25,
+      roughness: 0.3,
+      metalness: 0.1,
+    }),
+  );
+  resinBacking.rotation.x = -Math.PI / 2;
+  resinBacking.position.set(centerX, WATER_SURFACE_Y - WATER_RESIN_DEPTH, centerZ);
+  resinBacking.renderOrder = 0;
+  scene.add(resinBacking);
+  _resinBacking = resinBacking;
+
+  // ── Water surface shader ──
   const water = new Water(geometry, {
     textureWidth: 1024,
     textureHeight: 1024,
     waterNormals: normalTexture,
-    sunDirection: new THREE.Vector3(0.2, 1, 0.12).normalize(),
-    sunColor: "#ffffff",
-    waterColor: "#214a66",
-    distortionScale: 6.2,
+    sunDirection: DAY_WATER_SUN_DIRECTION.clone(),
+    sunColor: DAY_WATER_SUN_COLOR,
+    waterColor: "#2a8090",
+    distortionScale: 3.4,
     fog: scene.fog != null,
-    alpha: 0.95,
+    alpha: 0.82,
   });
 
   water.rotation.x = -Math.PI / 2;
@@ -394,6 +409,7 @@ export function createWaterTiles(scene: THREE.Scene): WaterTile[] {
   const waterMaterial = water.material as THREE.ShaderMaterial;
   waterMaterial.depthTest = true;
   waterMaterial.depthWrite = true;
+  waterMaterial.transparent = true;
   scene.add(water);
 
   const positionAttr = geometry.attributes.position as THREE.BufferAttribute;
@@ -480,14 +496,15 @@ export function animateWaterTiles(
   const currentEnergy = THREE.MathUtils.clamp(centerSpeed * 0.55 + shear * 0.38 + knotEnergy * 0.22, 0, 2.6);
   const swellScale = 0.32 + waveIntensity * 0.54 - currentEnergy * 0.06;
   const distortionScale = 4.2 + waveIntensity * 7.6 + effectiveEnv.windSpeedMph * 0.06 + currentEnergy * 5.8;
+  // Soft teal base (#4E8FA6) with subtle temperature modulation
   const waterTempNorm = THREE.MathUtils.clamp((env.seaSurfaceTempC - 2) / 22, 0, 1);
-  const waterHue = 0.565 - waterTempNorm * 0.045;
-  const waterSat = 0.5 + waterTempNorm * 0.08;
-  const waterLight = night ? 0.12 + waterTempNorm * 0.03 : 0.2 + waterTempNorm * 0.05;
+  const waterHue = 0.54 - waterTempNorm * 0.02;
+  const waterSat = 0.52 + waterTempNorm * 0.06;
+  const waterLight = night ? 0.22 + waterTempNorm * 0.04 : 0.42 + waterTempNorm * 0.06;
 
   _waterColor.setHSL(waterHue, waterSat, waterLight);
   const sunDirection = getSunDirection(night);
-  const sunColor = night ? "#9caec9" : "#ffffff";
+  const sunColor = night ? NIGHT_WATER_SUN_COLOR : DAY_WATER_SUN_COLOR;
 
   for (const tile of shaderTiles) {
     const uniforms = getWaterUniforms(tile.mesh);
@@ -509,6 +526,13 @@ export function disposeWaterTiles(scene: THREE.Scene, tiles: WaterTile[]): void 
     tile.mesh.geometry.dispose();
     tile.mesh.material.dispose();
     tile.normalTexture.dispose();
+  }
+
+  if (_resinBacking) {
+    scene.remove(_resinBacking);
+    _resinBacking.geometry.dispose();
+    (_resinBacking.material as THREE.Material).dispose();
+    _resinBacking = null;
   }
 
   scene.remove(currentArrowGroup);

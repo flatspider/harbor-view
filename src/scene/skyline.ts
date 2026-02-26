@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { LAND_SURFACE_Y, WORLD_UNITS_PER_METER, lonLatToWorld2 } from "./constants";
+import { toonGradient } from "./toonGradient";
 import type {
   Feature,
   FeatureCollection,
@@ -47,7 +48,7 @@ function addBuildingMesh(
   group: THREE.Group,
   rings: number[][][],
   properties: GeoJsonProperties,
-  material: THREE.MeshStandardMaterial,
+  material: THREE.MeshToonMaterial,
 ): boolean {
   const shape = polygonRingsToShape(rings);
   if (!shape) return false;
@@ -84,10 +85,9 @@ function addSkyline(
   const skylineGroup = new THREE.Group();
   skylineGroup.name = "manhattan-skyline-smoke";
 
-  const material = new THREE.MeshStandardMaterial({
+  const material = new THREE.MeshToonMaterial({
     color: "#2f3b43",
-    roughness: 0.88,
-    metalness: 0.08,
+    gradientMap: toonGradient,
   });
 
   let added = 0;

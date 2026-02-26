@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { LAND_BASE_HEIGHT, LAND_SURFACE_Y, lonLatToWorld2 } from "./constants";
+import { toonGradient } from "./toonGradient";
 
 /* ── Land Polygon Point-in-Polygon ───────────────────────────────────── */
 
@@ -76,14 +77,23 @@ function polygonRingsToShape(rings: number[][][]): THREE.Shape | null {
 }
 
 function addGeoJsonLand(scene: THREE.Scene, data: GeoJsonFeatureCollection): boolean {
-  const landMaterial = new THREE.MeshStandardMaterial({
-    color: "#6aad38",
-    emissive: "#3a7a1e",
-    emissiveIntensity: 0.6,
-    roughness: 0.85,
-    metalness: 0.0,
+  const landMaterial = new THREE.MeshToonMaterial({
+    color: "#5a8a55",
+    emissive: "#1a2a14",
+    emissiveIntensity: 0.2,
+    gradientMap: toonGradient,
   });
-  const edgeMaterial = new THREE.LineBasicMaterial({ color: "#3a5a28", transparent: true, opacity: 0.85 });
+  const cliffMaterial = new THREE.MeshToonMaterial({
+    color: "#4a7a44",
+    emissive: "#141f10",
+    emissiveIntensity: 0.15,
+    gradientMap: toonGradient,
+  });
+  const edgeMaterial = new THREE.LineBasicMaterial({
+    color: "#F4E6C8",
+    transparent: true,
+    opacity: 0.45,
+  });
 
   let added = false;
 
@@ -91,19 +101,52 @@ function addGeoJsonLand(scene: THREE.Scene, data: GeoJsonFeatureCollection): boo
     if (coordinates[0]?.length >= 3) landPolygonRings.push(createLandRingRecord(coordinates[0]));
     const shape = polygonRingsToShape(coordinates);
     if (!shape) return;
-    const mesh = new THREE.Mesh(
-      new THREE.ExtrudeGeometry(shape, { depth: LAND_BASE_HEIGHT, bevelEnabled: false }),
-      landMaterial,
-    );
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.y = LAND_SURFACE_Y - LAND_BASE_HEIGHT;
-    mesh.receiveShadow = true;
-    scene.add(mesh);
 
-    const edge = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry), edgeMaterial);
-    edge.rotation.copy(mesh.rotation);
-    edge.position.copy(mesh.position);
-    scene.add(edge);
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: LAND_BASE_HEIGHT,
+      bevelEnabled: true,
+      bevelThickness: 1.0,
+      bevelSize: 1.2,
+      bevelSegments: 4,
+    });
+
+    // Assign cliff material to side faces, land material to top/bottom caps
+    const groups = geometry.groups;
+    if (groups.length >= 2) {
+      // ExtrudeGeometry groups: [0] = side faces, [1] = top/bottom caps
+      // When 2+ groups exist, last group is the caps
+      const materials = [cliffMaterial, landMaterial];
+      const mesh = new THREE.Mesh(geometry, materials);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.y = LAND_SURFACE_Y - LAND_BASE_HEIGHT;
+      mesh.receiveShadow = true;
+      mesh.castShadow = true;
+      scene.add(mesh);
+
+      const edge = new THREE.LineSegments(
+        new THREE.EdgesGeometry(mesh.geometry, 25),
+        edgeMaterial,
+      );
+      edge.rotation.copy(mesh.rotation);
+      edge.position.copy(mesh.position);
+      scene.add(edge);
+    } else {
+      // Fallback: single material
+      const mesh = new THREE.Mesh(geometry, landMaterial);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.y = LAND_SURFACE_Y - LAND_BASE_HEIGHT;
+      mesh.receiveShadow = true;
+      mesh.castShadow = true;
+      scene.add(mesh);
+
+      const edge = new THREE.LineSegments(
+        new THREE.EdgesGeometry(mesh.geometry, 25),
+        edgeMaterial,
+      );
+      edge.rotation.copy(mesh.rotation);
+      edge.position.copy(mesh.position);
+      scene.add(edge);
+    }
     added = true;
   };
 

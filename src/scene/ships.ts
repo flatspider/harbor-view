@@ -389,6 +389,11 @@ export function reconcileShips(
         markerData.sizeScale = nextSizeScale;
         existing.geometry.dispose();
         existing.geometry = createShipGeometry(category, nextSizeScale);
+        const material = existing.material;
+        if (material instanceof THREE.MeshStandardMaterial) {
+          material.transparent = true;
+          material.opacity = 0;
+        }
       }
 
       const nextColor = new THREE.Color(style.color);
@@ -450,11 +455,15 @@ export function reconcileShips(
 
     const hullGeometry = createShipGeometry(category, nextSizeScale);
     const hullColor = new THREE.Color(style.color);
-    const hull = new THREE.Mesh(
-      hullGeometry,
-      new THREE.MeshStandardMaterial({ color: hullColor, roughness: 0.55, metalness: 0.2 }),
-    ) as ShipMesh;
-    hull.castShadow = true;
+    const hullMaterial = new THREE.MeshStandardMaterial({
+      color: hullColor,
+      roughness: 0.55,
+      metalness: 0.2,
+      transparent: true,
+      opacity: 0,
+    });
+    const hull = new THREE.Mesh(hullGeometry, hullMaterial) as ShipMesh;
+    hull.castShadow = false;
     hull.position.copy(spawnTarget);
     hull.position.y = SHIP_BASE_Y;
     hull.renderOrder = 5;

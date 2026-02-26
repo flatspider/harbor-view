@@ -62,11 +62,11 @@ let _nextLandMaskProbeAt = 0;
 let _waterShaderTime = 0;
 
 const WATER_NORMALS_URL = "https://threejs.org/examples/textures/waternormals.jpg";
-const WATER_SURFACE_Y = 1.5;
+const WATER_SURFACE_Y = -1;
 const LAND_MASK_DEPTH = 2.2;
 const LAND_MASK_POLL_SECONDS = 1.2;
 const CURRENT_ARROW_SPACING = 170;
-const CURRENT_ARROW_Y_OFFSET = 3.4;
+const CURRENT_ARROW_Y_OFFSET = 1.5;
 const MAX_ARROW_COUNT = 140;
 const MIN_ARROW_SPEED = 0.14;
 const FLOW_CELLS: FlowCell[] = [

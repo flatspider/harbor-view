@@ -53,11 +53,12 @@ export const WORLD_WIDTH = Math.max(
   Math.round((GEO_EAST_WEST_KM * WORLD_UNITS_PER_KM) / TILE_SIZE) * TILE_SIZE,
 );
 
-export const LAND_BASE_HEIGHT = 12;
+export const LAND_BASE_HEIGHT = 5;
+export const LAND_SURFACE_Y = 2;
 export const RENDER_LAND_POLYGONS = true;
-export const RENDER_SMOKE_SKYLINE = true;
-export const SHIP_BASE_Y = 10;
-export const WAKE_WORLD_Y = 0.22;
+export const RENDER_SMOKE_SKYLINE = false;
+export const SHIP_BASE_Y = -0.5;
+export const WAKE_WORLD_Y = -0.8;
 export const WAKE_BASE_OPACITY = 0.09;
 export const SHIP_COLLISION_PADDING = 8;
 export const SHIP_PLACEMENT_STEP = 12;

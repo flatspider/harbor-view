@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { LAND_BASE_HEIGHT, WORLD_UNITS_PER_METER, lonLatToWorld2 } from "./constants";
+import { LAND_SURFACE_Y, WORLD_UNITS_PER_METER, lonLatToWorld2 } from "./constants";
 import type {
   Feature,
   FeatureCollection,
@@ -19,7 +19,7 @@ const MIN_HEIGHT_METERS = 8;
 const MAX_HEIGHT_METERS = 450;
 const BASE_LIFT_WORLD = 0.8;
 const FEET_TO_METERS = 0.3048;
-const LAND_SURFACE_Y = LAND_BASE_HEIGHT * 2;
+const SKYLINE_BASE_Y = LAND_SURFACE_Y;
 const HEIGHT_EXAGGERATION = 1.35;
 
 function toNumber(value: unknown): number | null {
@@ -69,7 +69,7 @@ function addBuildingMesh(
     material,
   );
   mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = LAND_SURFACE_Y + baseWorld + BASE_LIFT_WORLD;
+  mesh.position.y = SKYLINE_BASE_Y + baseWorld + BASE_LIFT_WORLD;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   mesh.frustumCulled = true;

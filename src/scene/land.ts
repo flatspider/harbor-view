@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { LAND_BASE_HEIGHT, lonLatToWorld2 } from "./constants";
+import { LAND_BASE_HEIGHT, LAND_SURFACE_Y, lonLatToWorld2 } from "./constants";
 
 /* ── Land Polygon Point-in-Polygon ───────────────────────────────────── */
 
@@ -96,7 +96,7 @@ function addGeoJsonLand(scene: THREE.Scene, data: GeoJsonFeatureCollection): boo
       landMaterial,
     );
     mesh.rotation.x = -Math.PI / 2;
-    mesh.position.y = LAND_BASE_HEIGHT;
+    mesh.position.y = LAND_SURFACE_Y - LAND_BASE_HEIGHT;
     mesh.receiveShadow = true;
     scene.add(mesh);
 

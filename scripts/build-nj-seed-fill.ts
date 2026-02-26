@@ -10,7 +10,7 @@ import type {
   Polygon,
 } from "geojson";
 
-const DEFAULT_BBOX: [number, number, number, number] = [-74.26, 40.48, -73.9, 40.78];
+const DEFAULT_BBOX: [number, number, number, number] = [-74.26, 40.48, -73.75, 40.78];
 const DEFAULT_WATER_MASK = "public/assets/data/harbor-water-polygons.geojson";
 const DEFAULT_COASTLINE = "public/assets/data/coastline-nj-harbor.geojson";
 const DEFAULT_OUTPUT = "public/assets/data/nj-land-polygons.geojson";

@@ -34,7 +34,7 @@ What this does:
 
 Default harbor bounds used in import/build:
 
-- `-74.26,40.48,-73.90,40.78`
+- `-74.26,40.48,-73.75,40.78`
 
 To disable bbox clipping during import:
 
@@ -102,4 +102,4 @@ Optional arguments:
 - `--nj` legacy single-input path (can contain polygons, lines, or both)
 - `--water-mask` polygon water mask path (subtracts water from land before merge)
 - `--bbox west,south,east,north`
-  - default: `-74.26,40.48,-73.90,40.78` (NY Harbor bounds)
+  - default: `-74.26,40.48,-73.75,40.78` (NY Harbor bounds)

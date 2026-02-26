@@ -46,7 +46,7 @@ const DEFAULT_FILES = [
 const NY_HARBOR_BBOX: [number, number, number, number] = [
   -74.26, // west
   40.48, // south
-  -73.9, // east
+  -73.75, // east
   40.92, // north
 ];
 

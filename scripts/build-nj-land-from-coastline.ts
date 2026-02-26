@@ -16,7 +16,7 @@ import type {
   Polygon,
 } from "geojson";
 
-const DEFAULT_BBOX: [number, number, number, number] = [-74.26, 40.48, -73.9, 40.78];
+const DEFAULT_BBOX: [number, number, number, number] = [-74.26, 40.48, -73.75, 40.78];
 const DEFAULT_INPUT = "public/assets/data/nj-coastline.geojson";
 const DEFAULT_OUTPUT = "public/assets/data/nj-land-polygons.geojson";
 

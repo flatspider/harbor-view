@@ -15,7 +15,7 @@ import type {
   Polygon,
 } from "geojson";
 
-const DEFAULT_BBOX: [number, number, number, number] = [-74.26, 40.48, -73.9, 40.78];
+const DEFAULT_BBOX: [number, number, number, number] = [-74.26, 40.48, -73.75, 40.78];
 const DEFAULT_NYC_PATH = "public/assets/data/nyc-harbor-land.geojson";
 const DEFAULT_OUTPUT_PATH = "public/assets/data/nyc-harbor-land.geojson";
 const DEFAULT_NJ_COAST_PATH = "public/assets/data/nj-coastline.geojson";

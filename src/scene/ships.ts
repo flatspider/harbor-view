@@ -144,9 +144,12 @@ const SHIP_CATEGORY_SPRITE_NAME = "ship-category-sprite";
 const SHIP_CATEGORY_MODEL_NAME = "ship-category-model";
 const SHIP_CATEGORY_VISUAL_NAMES = new Set([SHIP_CATEGORY_SPRITE_NAME, SHIP_CATEGORY_MODEL_NAME]);
 const SHIP_SHARED_PASSENGER_ASSET_KEY = "sharedPassengerFerryAsset";
+const FORCE_FERRY_MODEL_FOR_ALL_SHIPS = true;
 
 function shouldUsePassengerFerryModel(category: ShipCategory, passengerFerryPrototype?: THREE.Object3D): boolean {
-  return category === "passenger" && Boolean(passengerFerryPrototype);
+  if (!passengerFerryPrototype) return false;
+  if (FORCE_FERRY_MODEL_FOR_ALL_SHIPS) return true;
+  return category === "passenger";
 }
 
 function shouldRenderShipDetail(category: ShipCategory, passengerFerryPrototype?: THREE.Object3D): boolean {
@@ -496,6 +499,8 @@ export function reconcileShips(
       const nextColor = new THREE.Color(style.color);
       markerData.baseColor.copy(nextColor);
       existing.material.color.copy(nextColor);
+      const rendersAsModel = shouldUsePassengerFerryModel(category, passengerFerryPrototype);
+      existing.material.opacity = rendersAsModel ? 0 : 1;
       markerData.wakeWidth = style.wakeWidth;
       markerData.wakeLength = style.wakeLength;
 
@@ -546,7 +551,7 @@ export function reconcileShips(
       color: hullColor,
       gradientMap: toonGradient,
       transparent: true,
-      opacity: 0,
+      opacity: shouldUsePassengerFerryModel(category, passengerFerryPrototype) ? 0 : 1,
     });
     const hull = new THREE.Mesh(hullGeometry, hullMaterial) as ShipMesh;
     hull.castShadow = false;

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { AircraftData } from "../types/aircraft";
 import { getAircraftSizeClass, type AircraftSizeClass } from "../types/aircraft";
+import { createAirplaneModelInstance } from "./airplaneModel";
 import { latLonToWorld, WORLD_UNITS_PER_METER, PERF_DEBUG } from "./constants";
 import { toonGradient } from "./toonGradient";
 
@@ -28,19 +29,19 @@ const SIZE_SCALES: Record<AircraftSizeClass, number> = {
  * Convert barometric altitude (feet) to world-space Y using logarithmic compression.
  *
  * Target mapping:
- *   1,000 ft  ->  ~25y
- *   5,000 ft  ->  ~45y
- *  35,000 ft  ->  ~120y
+ *   1,000 ft  ->  ~145y
+ *   5,000 ft  ->  ~195y
+ *  35,000 ft  ->  ~340y
  */
 function altitudeToWorldY(altFeet: number): number {
   const clampedAlt = Math.max(altFeet, 100);
   // log(100) ~= 4.6, log(35000) ~= 10.5
-  // Map that to roughly 15..120 range
+  // Map that to roughly 120..360 range
   const logAlt = Math.log(clampedAlt);
   const minLog = Math.log(100);
   const maxLog = Math.log(40000);
   const t = (logAlt - minLog) / (maxLog - minLog);
-  return 15 + t * 110;
+  return 120 + t * 240;
 }
 
 /* ── Geometry Factory ──────────────────────────────────────────────────── */
@@ -49,7 +50,7 @@ function altitudeToWorldY(altFeet: number): number {
  * Procedural Ghibli-style airplane mesh.
  * Simple shapes: fuselage cylinder, wing box, tail fin, engine accents.
  */
-function createAirplaneGroup(sizeClass: AircraftSizeClass): THREE.Group {
+function createProceduralAirplaneGroup(sizeClass: AircraftSizeClass): THREE.Group {
   const scale = SIZE_SCALES[sizeClass];
   const group = new THREE.Group();
 
@@ -139,6 +140,16 @@ function createAirplaneGroup(sizeClass: AircraftSizeClass): THREE.Group {
   return group;
 }
 
+function createAirplaneGroup(sizeClass: AircraftSizeClass, airplanePrototype?: THREE.Object3D): THREE.Group {
+  if (airplanePrototype) {
+    const group = new THREE.Group();
+    const model = createAirplaneModelInstance(airplanePrototype, sizeClass);
+    group.add(model);
+    return group;
+  }
+  return createProceduralAirplaneGroup(sizeClass);
+}
+
 /* ── Marker Data Type ──────────────────────────────────────────────────── */
 
 export interface AircraftMarkerData {
@@ -155,12 +166,17 @@ export interface AircraftMarkerData {
     lastAnimateTimeMs: number;
   };
   sizeClass: AircraftSizeClass;
+  usesModel: boolean;
 }
 
 export type AircraftMarker = THREE.Group;
 
 function getAircraftMarkerData(group: THREE.Object3D): AircraftMarkerData {
   return group.userData as AircraftMarkerData;
+}
+
+function isSharedAircraftModelAsset(object: THREE.Object3D): boolean {
+  return (object.userData as { sharedAircraftModelAsset?: boolean }).sharedAircraftModelAsset === true;
 }
 
 function projectPositionFromCourseAndSpeed(
@@ -215,6 +231,7 @@ export function reconcileAircraft(
   scene: THREE.Scene,
   aircraftMap: Map<string, AircraftData>,
   markers: Map<string, AircraftMarker>,
+  airplanePrototype?: THREE.Object3D,
 ): void {
   const reconcileStart = performance.now();
   let created = 0;
@@ -240,18 +257,22 @@ export function reconcileAircraft(
       data.target.copy(measuredTarget);
 
       // Rebuild geometry if size class changed
-      if (data.sizeClass !== sizeClass) {
+      const usesModel = Boolean(airplanePrototype);
+      if (data.sizeClass !== sizeClass || data.usesModel !== usesModel) {
         data.sizeClass = sizeClass;
+        data.usesModel = usesModel;
         // Remove old children and rebuild
         while (existing.children.length > 0) {
           const child = existing.children[0];
           existing.remove(child);
           if (child instanceof THREE.Mesh) {
-            child.geometry.dispose();
-            if (child.material instanceof THREE.Material) child.material.dispose();
+            if (!isSharedAircraftModelAsset(child)) {
+              child.geometry.dispose();
+              if (child.material instanceof THREE.Material) child.material.dispose();
+            }
           }
         }
-        const newGroup = createAirplaneGroup(sizeClass);
+        const newGroup = createAirplaneGroup(sizeClass, airplanePrototype);
         for (const child of [...newGroup.children]) {
           newGroup.remove(child);
           existing.add(child);
@@ -267,7 +288,7 @@ export function reconcileAircraft(
     const targetY = altitudeToWorldY(ac.alt_baro);
     const target = new THREE.Vector3(worldPos.x, targetY, worldPos.z);
 
-    const group = createAirplaneGroup(sizeClass);
+    const group = createAirplaneGroup(sizeClass, airplanePrototype);
     group.position.copy(target);
     group.userData = {
       isAircraftMarker: true,
@@ -283,6 +304,7 @@ export function reconcileAircraft(
         lastAnimateTimeMs: Date.now(),
       },
       sizeClass,
+      usesModel: Boolean(airplanePrototype),
     } as AircraftMarkerData;
 
     scene.add(group);
@@ -296,6 +318,7 @@ export function reconcileAircraft(
     scene.remove(marker);
     marker.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
+      if (isSharedAircraftModelAsset(child)) return;
       child.geometry.dispose();
       if (Array.isArray(child.material)) {
         for (const mat of child.material) mat.dispose();
@@ -368,7 +391,9 @@ export function animateAircraft(
 
     // Scale by zoom
     const sizeScale = SIZE_SCALES[data.sizeClass];
-    const visualScale = sizeScale * zoomScale * 0.8;
+    const modelBoost = data.usesModel ? 1.65 : 1;
+    const farZoomBoost = 1 + Math.pow(Math.max(0, zoomScale - 1), 1.6) * 0.85;
+    const visualScale = sizeScale * zoomScale * 0.8 * modelBoost * farZoomBoost;
     marker.scale.setScalar(visualScale);
   }
 }

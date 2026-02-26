@@ -20,6 +20,7 @@ import {
   type ShipMesh,
   type OccupiedSlot,
 } from "./constants";
+import { createContainerShipModelInstance } from "./containerShipModel";
 import { isPointOnLand } from "./land";
 import { createPassengerFerryModelInstance } from "./passengerFerryModel";
 import { toonGradient } from "./toonGradient";
@@ -66,10 +67,10 @@ export function createShipGeometry(category: string, sizeScale: number): THREE.B
 
 export function createWakeGeometry(): THREE.BufferGeometry {
   const shape = new THREE.Shape();
-  shape.moveTo(0, 4);
-  shape.lineTo(-6.6, -35);
-  shape.lineTo(6.6, -35);
-  shape.lineTo(0, -10);
+  shape.moveTo(0, 1.6);
+  shape.lineTo(-2.8, -9.5);
+  shape.lineTo(2.8, -9.5);
+  shape.lineTo(0, -3.1);
   shape.closePath();
   const geometry = new THREE.ShapeGeometry(shape);
   geometry.rotateX(-Math.PI / 2);
@@ -143,25 +144,45 @@ const SHIP_DETAIL_NAME = "ship-detail";
 const SHIP_CATEGORY_SPRITE_NAME = "ship-category-sprite";
 const SHIP_CATEGORY_MODEL_NAME = "ship-category-model";
 const SHIP_CATEGORY_VISUAL_NAMES = new Set([SHIP_CATEGORY_SPRITE_NAME, SHIP_CATEGORY_MODEL_NAME]);
-const SHIP_SHARED_PASSENGER_ASSET_KEY = "sharedPassengerFerryAsset";
-const FORCE_FERRY_MODEL_FOR_ALL_SHIPS = true;
+const SHIP_SHARED_MODEL_ASSET_KEY = "sharedShipModelAsset";
 
-function shouldUsePassengerFerryModel(category: ShipCategory, passengerFerryPrototype?: THREE.Object3D): boolean {
-  if (!passengerFerryPrototype) return false;
-  if (FORCE_FERRY_MODEL_FOR_ALL_SHIPS) return true;
-  return category === "passenger";
+function getShipModelPrototype(
+  category: ShipCategory,
+  passengerFerryPrototype?: THREE.Object3D,
+  containerShipPrototype?: THREE.Object3D,
+): THREE.Object3D | undefined {
+  if (category === "cargo") return containerShipPrototype;
+  return passengerFerryPrototype;
 }
 
-function shouldRenderShipDetail(category: ShipCategory, passengerFerryPrototype?: THREE.Object3D): boolean {
-  return !shouldUsePassengerFerryModel(category, passengerFerryPrototype);
+function shouldUseShipModel(
+  category: ShipCategory,
+  passengerFerryPrototype?: THREE.Object3D,
+  containerShipPrototype?: THREE.Object3D,
+): boolean {
+  return Boolean(getShipModelPrototype(category, passengerFerryPrototype, containerShipPrototype));
+}
+
+function shouldRenderShipDetail(
+  category: ShipCategory,
+  passengerFerryPrototype?: THREE.Object3D,
+  containerShipPrototype?: THREE.Object3D,
+): boolean {
+  return !shouldUseShipModel(category, passengerFerryPrototype, containerShipPrototype);
 }
 
 function isSharedPassengerFerryAsset(object: THREE.Object3D): boolean {
-  return (object.userData as { sharedPassengerFerryAsset?: boolean })[SHIP_SHARED_PASSENGER_ASSET_KEY] === true;
+  return (object.userData as { sharedShipModelAsset?: boolean })[SHIP_SHARED_MODEL_ASSET_KEY] === true;
 }
 
 function getShipCategoryVisual(parent: THREE.Object3D): THREE.Object3D | null {
   return parent.children.find((child) => SHIP_CATEGORY_VISUAL_NAMES.has(child.name)) ?? null;
+}
+
+function hasVisibleShipBody(marker: ShipMesh): boolean {
+  const hullVisible = marker.material.opacity > 0.02;
+  const categoryVisual = getShipCategoryVisual(marker);
+  return hullVisible || categoryVisual !== null;
 }
 
 function createShipCategoryVisual(
@@ -169,9 +190,13 @@ function createShipCategoryVisual(
   sizeScale: number,
   categoryTextures: Record<ShipCategory, THREE.Texture> | undefined,
   passengerFerryPrototype?: THREE.Object3D,
+  containerShipPrototype?: THREE.Object3D,
 ): THREE.Object3D | null {
-  if (shouldUsePassengerFerryModel(category, passengerFerryPrototype)) {
-    return createPassengerFerryModelInstance(passengerFerryPrototype!, sizeScale);
+  if (category === "cargo" && containerShipPrototype) {
+    return createContainerShipModelInstance(containerShipPrototype, sizeScale);
+  }
+  if (passengerFerryPrototype) {
+    return createPassengerFerryModelInstance(passengerFerryPrototype, sizeScale);
   }
   return createShipCategorySprite(category, sizeScale, categoryTextures);
 }
@@ -191,10 +216,11 @@ function needsShipCategoryVisualRefresh(
   category: ShipCategory,
   categoryTextures: Record<ShipCategory, THREE.Texture> | undefined,
   passengerFerryPrototype?: THREE.Object3D,
+  containerShipPrototype?: THREE.Object3D,
 ): boolean {
   const visual = getShipCategoryVisual(parent);
-  const wantsPassengerModel = shouldUsePassengerFerryModel(category, passengerFerryPrototype);
-  if (wantsPassengerModel) {
+  const wantsModel = shouldUseShipModel(category, passengerFerryPrototype, containerShipPrototype);
+  if (wantsModel) {
     return visual?.name !== SHIP_CATEGORY_MODEL_NAME;
   }
   if (!categoryTextures) return false;
@@ -207,9 +233,10 @@ function syncShipDetailMesh(
   sizeScale: number,
   hullColor: THREE.Color,
   passengerFerryPrototype?: THREE.Object3D,
+  containerShipPrototype?: THREE.Object3D,
 ): void {
   const existingDetail = parent.children.find((child) => child.name === SHIP_DETAIL_NAME);
-  const wantsDetail = shouldRenderShipDetail(category, passengerFerryPrototype);
+  const wantsDetail = shouldRenderShipDetail(category, passengerFerryPrototype, containerShipPrototype);
 
   if (!wantsDetail) {
     if (existingDetail instanceof THREE.Mesh) {
@@ -254,7 +281,6 @@ export function getShipCollisionRadius(ship: ShipData, style: ShipCategoryStyle)
 const SHIP_BOUNDARY_SCALE_STEPS = [1, 0.86, 0.74, 0.62] as const;
 const SHIP_LAND_CLEARANCE = 2.5;
 const SHIP_BOUNDARY_SAMPLE_SPACING = 8;
-const SHIP_WATER_FALLBACK_RADIUS = 120;
 const SHIP_POSITION_RECONCILE_EPSILON = 0.000015;
 const SHIP_BOUNDARY_RECHECK_INTERVAL_MS = 900;
 const SHIP_BOUNDARY_RECHECK_MOVING_INTERVAL_MS = 450;
@@ -263,6 +289,18 @@ const SHIP_CORRECTION_HALF_LIFE_MS = 2_500;
 const SHIP_MAX_SPEED_KNOTS = 55;
 const AIS_SOG_UNAVAILABLE_THRESHOLD = 102.2;
 const SHIP_POSITION_NOISE_RADIUS = 0.55;
+const SHIP_MOTION_DEBUG =
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).has("shipMotionDebug");
+const SHIP_MOTION_LOG_INTERVAL_MS = 3_000;
+const shipMotionLastLogAt = new Map<number, number>();
+const SHIP_CORRECTION_INJECT_GAIN = 0.12;
+const SHIP_MAX_CORRECTION_UNITS = 22;
+const SHIP_TARGET_DAMPING_TAU_MS = 2200;
+const SHIP_POSITION_DAMPING_TAU_MOVING_MS = 1600;
+const SHIP_POSITION_DAMPING_TAU_IDLE_MS = 2600;
+const SHIP_RENDER_LIMIT = 80;
+const SHIP_INVALID_POSITION_HIDE_STRIKES = 4;
 
 interface ResolvedShipTarget {
   target: THREE.Vector3 | null;
@@ -285,16 +323,86 @@ function projectPositionFromCourseAndSpeed(
   );
 }
 
-function sanitizeShipSpeedKnots(rawSog: number): number {
-  if (!Number.isFinite(rawSog) || rawSog <= 0) return 0;
-  if (rawSog >= AIS_SOG_UNAVAILABLE_THRESHOLD) return 0;
-  return Math.min(rawSog, SHIP_MAX_SPEED_KNOTS);
+function angularDifferenceDeg(a: number, b: number): number {
+  const delta = Math.abs((((a - b) % 360) + 540) % 360 - 180);
+  return delta;
 }
 
-function sanitizeCourseDeg(rawCog: number, fallbackDeg = 0): number {
+function sanitizeShipSpeedKnots(rawSog: number, observedKnots?: number): number {
+  if (!Number.isFinite(rawSog) || rawSog <= 0) return 0;
+  if (rawSog >= AIS_SOG_UNAVAILABLE_THRESHOLD) return 0;
+
+  const candidateA = rawSog;
+  const candidateB = rawSog / 10;
+
+  let chosen = candidateA;
+  if (Number.isFinite(observedKnots) && observedKnots! > 0.3 && observedKnots! < 120) {
+    const errorA = Math.abs(candidateA - observedKnots!);
+    const errorB = Math.abs(candidateB - observedKnots!);
+    if (errorB + 0.2 < errorA) {
+      chosen = candidateB;
+    }
+  } else if (Number.isInteger(rawSog) && rawSog >= 35) {
+    // Heuristic for feeds that provide tenths-of-knot integers.
+    chosen = candidateB;
+  }
+
+  return Math.min(Math.max(0, chosen), SHIP_MAX_SPEED_KNOTS);
+}
+
+function sanitizeCourseDeg(rawCog: number, fallbackDeg = 0, observedCourseDeg?: number): number {
   if (!Number.isFinite(rawCog)) return fallbackDeg;
-  const normalized = ((rawCog % 360) + 360) % 360;
-  return normalized;
+  const candidateA = ((rawCog % 360) + 360) % 360;
+  const candidateB = (((rawCog / 10) % 360) + 360) % 360;
+
+  let chosen = rawCog > 360 ? candidateB : candidateA;
+  if (Number.isFinite(observedCourseDeg)) {
+    const diffChosen = angularDifferenceDeg(chosen, observedCourseDeg!);
+    if (diffChosen > 120) {
+      const diffA = angularDifferenceDeg(candidateA, observedCourseDeg!);
+      const diffB = angularDifferenceDeg(candidateB, observedCourseDeg!);
+      chosen = diffB + 4 < diffA ? candidateB : candidateA;
+      if (angularDifferenceDeg(chosen, observedCourseDeg!) > 130) {
+        chosen = observedCourseDeg!;
+      }
+    }
+  }
+
+  return chosen;
+}
+
+function clampVectorLength(vector: THREE.Vector3, maxLength: number): void {
+  const length = vector.length();
+  if (length <= maxLength || length === 0) return;
+  vector.multiplyScalar(maxLength / length);
+}
+
+function freezeShipMotion(marker: ShipMesh, markerData: ShipMarkerData): void {
+  markerData.motion.prevAnchorPosition.copy(marker.position);
+  markerData.motion.prevAnchorTimeMs = markerData.motion.anchorTimeMs;
+  markerData.motion.anchorPosition.copy(marker.position);
+  markerData.motion.anchorTimeMs = Date.now();
+  markerData.motion.speedKnots = 0;
+  markerData.motion.correction.set(0, 0, 0);
+  markerData.target.copy(marker.position);
+}
+
+function estimateObservedSpeedKnots(from: THREE.Vector3, to: THREE.Vector3, dtMs: number): number {
+  if (dtMs <= 0) return 0;
+  const dx = to.x - from.x;
+  const dz = to.z - from.z;
+  const distanceUnits = Math.hypot(dx, dz);
+  const distanceMeters = distanceUnits / WORLD_UNITS_PER_METER;
+  const mps = distanceMeters / (dtMs / 1000);
+  return mps / 0.5144;
+}
+
+function estimateObservedCourseDeg(from: THREE.Vector3, to: THREE.Vector3): number | null {
+  const dx = to.x - from.x;
+  const dz = to.z - from.z;
+  if (dx * dx + dz * dz < 0.0001) return null;
+  const radians = Math.atan2(-dx, dz);
+  return (((radians * 180) / Math.PI) + 360) % 360;
 }
 
 function applyExponentialCorrectionDecay(correction: THREE.Vector3, dtMs: number): void {
@@ -308,12 +416,18 @@ function updateShipMotionFromTelemetry(
   measuredTarget: THREE.Vector3,
   measuredAtMs: number,
   sog: number,
-  cog: number,
+  headingDeg: number,
+  observedKnots?: number,
+  observedCourseDeg?: number,
 ): void {
   const sampleTime = Math.max(0, measuredAtMs);
   const previousMotion = markerData.motion;
-  const sanitizedSpeed = sanitizeShipSpeedKnots(sog);
-  const sanitizedCourse = sanitizeCourseDeg(cog, previousMotion.courseDeg);
+  if (sampleTime > previousMotion.anchorTimeMs) {
+    previousMotion.prevAnchorPosition.copy(previousMotion.anchorPosition);
+    previousMotion.prevAnchorTimeMs = previousMotion.anchorTimeMs;
+  }
+  const sanitizedSpeed = sanitizeShipSpeedKnots(sog, observedKnots);
+  const sanitizedCourse = sanitizeCourseDeg(headingDeg, previousMotion.courseDeg, observedCourseDeg);
   const predictedAtSample = projectPositionFromCourseAndSpeed(
     previousMotion.anchorPosition,
     previousMotion.courseDeg,
@@ -323,12 +437,35 @@ function updateShipMotionFromTelemetry(
 
   const residual = measuredTarget.clone().sub(predictedAtSample);
   if (residual.lengthSq() > SHIP_POSITION_NOISE_RADIUS * SHIP_POSITION_NOISE_RADIUS) {
-    previousMotion.correction.add(residual);
+    previousMotion.correction.addScaledVector(residual, SHIP_CORRECTION_INJECT_GAIN);
+    clampVectorLength(previousMotion.correction, SHIP_MAX_CORRECTION_UNITS);
   }
   previousMotion.anchorPosition.copy(measuredTarget);
   previousMotion.anchorTimeMs = sampleTime;
   previousMotion.speedKnots = sanitizedSpeed;
   previousMotion.courseDeg = sanitizedCourse;
+
+  if (SHIP_MOTION_DEBUG && Number.isFinite(observedKnots) && Number.isFinite(observedCourseDeg)) {
+    const courseDelta = angularDifferenceDeg(sanitizedCourse, observedCourseDeg!);
+    const speedDelta = Math.abs(sanitizedSpeed - observedKnots!);
+    const now = Date.now();
+    const lastLogAt = shipMotionLastLogAt.get(markerData.mmsi) ?? 0;
+    if (now - lastLogAt >= SHIP_MOTION_LOG_INTERVAL_MS) {
+      const mismatch = courseDelta > 60 || speedDelta > 8;
+      shipMotionLastLogAt.set(markerData.mmsi, now);
+      console.info(mismatch ? "[ship-motion][mismatch]" : "[ship-motion]", {
+        mmsi: markerData.mmsi,
+        rawSog: sog,
+        chosenSog: Number(sanitizedSpeed.toFixed(2)),
+        observedSog: Number(observedKnots!.toFixed(2)),
+        rawHeading: headingDeg,
+        chosenCog: Number(sanitizedCourse.toFixed(1)),
+        observedCog: Number(observedCourseDeg!.toFixed(1)),
+        speedDelta: Number(speedDelta.toFixed(2)),
+        courseDelta: Number(courseDelta.toFixed(1)),
+      });
+    }
+  }
 }
 
 export function getShipFootprintRadius(sizeScale: number): number {
@@ -451,45 +588,6 @@ export function resolveShipTarget(
   };
 }
 
-function resolveWaterOnlyTarget(
-  desired: THREE.Vector3,
-  mmsi: number,
-  footprintRadius: number,
-  maxBoundaryScale = 1,
-): ResolvedShipTarget {
-  const boundaryScaleSteps = getBoundaryScaleSteps(maxBoundaryScale);
-
-  for (const boundaryScale of boundaryScaleSteps) {
-    const effectiveFootprintRadius = footprintRadius * boundaryScale;
-    if (isWorldCircleNavigable(desired.x, desired.z, effectiveFootprintRadius)) {
-      return {
-        target: desired.clone(),
-        boundaryScale,
-      };
-    }
-  }
-
-  const maxRadius = Math.min(SHIP_PLACEMENT_MAX_RADIUS, SHIP_WATER_FALLBACK_RADIUS);
-  const candidates = buildPlacementCandidates(desired, mmsi, maxRadius, SHIP_PLACEMENT_STEP);
-
-  for (const boundaryScale of boundaryScaleSteps) {
-    const effectiveFootprintRadius = footprintRadius * boundaryScale;
-    for (const candidate of candidates) {
-      if (candidate.x === desired.x && candidate.z === desired.z) continue;
-      if (!isWorldCircleNavigable(candidate.x, candidate.z, effectiveFootprintRadius)) continue;
-      return {
-        target: new THREE.Vector3(candidate.x, desired.y, candidate.z),
-        boundaryScale,
-      };
-    }
-  }
-
-  return {
-    target: null,
-    boundaryScale: boundaryScaleSteps[boundaryScaleSteps.length - 1] ?? 1,
-  };
-}
-
 /* ── Ship Reconciliation (create/update/remove) ──────────────────────── */
 
 export function reconcileShips(
@@ -499,30 +597,52 @@ export function reconcileShips(
   hoveredShipRef: { current: ShipMesh | null },
   categoryTextures?: Record<ShipCategory, THREE.Texture>,
   passengerFerryPrototype?: THREE.Object3D,
+  containerShipPrototype?: THREE.Object3D,
 ): void {
   const shipsEffectStart = performance.now();
   let skippedNoPosition = 0;
-  let fallbackPlacements = 0;
+  let skippedOnLand = 0;
+  let skippedByBudget = 0;
   let createdMarkers = 0;
   let updatedMarkers = 0;
   let hiddenByBoundary = 0;
 
   const nextShipIds = new Set<number>();
   const occupiedSlots: OccupiedSlot[] = [];
-  const orderedShips = Array.from(ships.values()).sort(
-    (a, b) => (b.lengthM > 0 ? b.lengthM : 0) - (a.lengthM > 0 ? a.lengthM : 0),
-  );
-
-  for (const ship of orderedShips) {
+  const waterShips: ShipData[] = [];
+  for (const ship of ships.values()) {
     if (ship.lat === 0 && ship.lon === 0) {
       skippedNoPosition += 1;
       continue;
     }
+    const hasExistingMarker = shipMarkers.has(ship.mmsi);
+    if (isPointOnLand(ship.lon, ship.lat) && !hasExistingMarker) {
+      skippedOnLand += 1;
+      continue;
+    }
+    waterShips.push(ship);
+  }
+  const orderedShips = waterShips.sort((a, b) => {
+    const aMoving = sanitizeShipSpeedKnots(a.sog) > 1.2 ? 1 : 0;
+    const bMoving = sanitizeShipSpeedKnots(b.sog) > 1.2 ? 1 : 0;
+    if (aMoving !== bMoving) return bMoving - aMoving;
+    const aLength = a.lengthM > 0 ? a.lengthM : 0;
+    const bLength = b.lengthM > 0 ? b.lengthM : 0;
+    if (aLength !== bLength) return bLength - aLength;
+    return b.lastPositionUpdate - a.lastPositionUpdate;
+  });
+  if (orderedShips.length > SHIP_RENDER_LIMIT) {
+    skippedByBudget = orderedShips.length - SHIP_RENDER_LIMIT;
+  }
+  const renderShips = orderedShips.slice(0, SHIP_RENDER_LIMIT);
+
+  for (const ship of renderShips) {
     const mmsi = ship.mmsi;
     const category = getShipCategory(ship.shipType);
     const style = CATEGORY_STYLES[category];
     const radius = getShipCollisionRadius(ship, style);
     const sanitizedSog = sanitizeShipSpeedKnots(ship.sog);
+    const isMoored = ship.navStatus === 5;
     const existing = shipMarkers.get(mmsi);
     const nextSizeScale = computeShipSizeScale(ship, style);
     const footprintRadius = getShipFootprintRadius(nextSizeScale);
@@ -537,23 +657,19 @@ export function reconcileShips(
         Math.abs(ship.lat - previousShip.lat) > SHIP_POSITION_RECONCILE_EPSILON ||
         Math.abs(ship.lon - previousShip.lon) > SHIP_POSITION_RECONCILE_EPSILON;
 
-      if (needsPlacementResolve) {
+      if (isMoored || sanitizedSog <= 0) {
+        placementTarget = markerData.target;
+        boundaryScale = markerData.boundaryScale;
+      } else if (needsPlacementResolve) {
         const baseTarget = latLonToWorld(ship.lat, ship.lon);
         // Moving vessels should follow telemetry directly; collision re-packing causes visible hopping.
         if (sanitizedSog > 1.2) {
-          const waterFallback = resolveWaterOnlyTarget(baseTarget, mmsi, footprintRadius, markerData.boundaryScale);
-          placementTarget = waterFallback.target;
-          boundaryScale = waterFallback.boundaryScale;
+          placementTarget = baseTarget;
+          boundaryScale = markerData.boundaryScale;
         } else {
           const collisionPlacement = resolveShipTarget(baseTarget, mmsi, radius, footprintRadius, occupiedSlots);
           placementTarget = collisionPlacement.target;
           boundaryScale = collisionPlacement.boundaryScale;
-          if (!placementTarget) {
-            fallbackPlacements += 1;
-            const waterFallback = resolveWaterOnlyTarget(baseTarget, mmsi, footprintRadius);
-            placementTarget = waterFallback.target;
-            boundaryScale = waterFallback.boundaryScale;
-          }
         }
       } else {
         placementTarget = markerData.target;
@@ -563,25 +679,53 @@ export function reconcileShips(
       markerData.ship = ship;
       markerData.radius = radius;
       markerData.boundaryScale = boundaryScale;
-      markerData.hiddenByBoundary = !placementTarget;
+      if (!placementTarget) {
+        markerData.invalidPositionStrikes += 1;
+        if (markerData.invalidPositionStrikes < SHIP_INVALID_POSITION_HIDE_STRIKES) {
+          placementTarget = markerData.target;
+          markerData.hiddenByBoundary = false;
+        } else {
+          markerData.hiddenByBoundary = true;
+        }
+      } else {
+        markerData.invalidPositionStrikes = 0;
+        markerData.hiddenByBoundary = false;
+      }
       markerData.nextBoundaryCheckAt = Date.now() + SHIP_BOUNDARY_RECHECK_INTERVAL_MS;
       if (placementTarget) {
-        updateShipMotionFromTelemetry(
-          markerData,
-          placementTarget,
-          ship.lastPositionUpdate,
-          sanitizedSog,
-          sanitizeCourseDeg(ship.cog, ship.heading),
-        );
+        if (isMoored || sanitizedSog <= 0) {
+          freezeShipMotion(existing, markerData);
+        } else {
+          const currentTelemetryWorld = latLonToWorld(ship.lat, ship.lon);
+          const prevTelemetryWorld = latLonToWorld(previousShip.lat, previousShip.lon);
+          const telemetryDtMs = Math.max(750, ship.lastPositionUpdate - previousShip.lastPositionUpdate);
+          const observedKnots = estimateObservedSpeedKnots(prevTelemetryWorld, currentTelemetryWorld, telemetryDtMs);
+          const observedCourseDeg = estimateObservedCourseDeg(prevTelemetryWorld, currentTelemetryWorld) ?? undefined;
+          updateShipMotionFromTelemetry(
+            markerData,
+            placementTarget,
+            ship.lastPositionUpdate,
+            ship.sog,
+            ship.heading,
+            observedKnots,
+            observedCourseDeg,
+          );
+        }
       }
 
       const needsGeometryRefresh =
         markerData.category !== category || Math.abs(markerData.sizeScale - nextSizeScale) > 0.04;
       const needsVisualRefresh =
         needsGeometryRefresh ||
-        needsShipCategoryVisualRefresh(existing, category, categoryTextures, passengerFerryPrototype);
+        needsShipCategoryVisualRefresh(
+          existing,
+          category,
+          categoryTextures,
+          passengerFerryPrototype,
+          containerShipPrototype,
+        );
       const hasDetailMesh = existing.children.some((child) => child.name === SHIP_DETAIL_NAME);
-      const wantsDetailMesh = shouldRenderShipDetail(category, passengerFerryPrototype);
+      const wantsDetailMesh = shouldRenderShipDetail(category, passengerFerryPrototype, containerShipPrototype);
       const needsDetailRefresh = needsGeometryRefresh || hasDetailMesh !== wantsDetailMesh;
 
       if (needsGeometryRefresh) {
@@ -599,17 +743,23 @@ export function reconcileShips(
       const nextColor = new THREE.Color(style.color);
       markerData.baseColor.copy(nextColor);
       existing.material.color.copy(nextColor);
-      const rendersAsModel = shouldUsePassengerFerryModel(category, passengerFerryPrototype);
+      const rendersAsModel = shouldUseShipModel(category, passengerFerryPrototype, containerShipPrototype);
       existing.material.opacity = rendersAsModel ? 0 : 1;
       markerData.wakeWidth = style.wakeWidth;
       markerData.wakeLength = style.wakeLength;
 
       if (needsDetailRefresh) {
-        syncShipDetailMesh(existing, category, nextSizeScale, nextColor, passengerFerryPrototype);
+        syncShipDetailMesh(existing, category, nextSizeScale, nextColor, passengerFerryPrototype, containerShipPrototype);
       }
       if (needsVisualRefresh) {
         removeShipCategoryVisual(existing);
-        const nextVisual = createShipCategoryVisual(category, nextSizeScale, categoryTextures, passengerFerryPrototype);
+        const nextVisual = createShipCategoryVisual(
+          category,
+          nextSizeScale,
+          categoryTextures,
+          passengerFerryPrototype,
+          containerShipPrototype,
+        );
         if (nextVisual) existing.add(nextVisual);
       }
       if (needsGeometryRefresh) {
@@ -642,14 +792,8 @@ export function reconcileShips(
     const collisionPlacement = resolveShipTarget(baseTarget, mmsi, radius, footprintRadius, occupiedSlots);
     placementTarget = collisionPlacement.target;
     boundaryScale = collisionPlacement.boundaryScale;
-    if (!placementTarget) {
-      fallbackPlacements += 1;
-      const waterFallback = resolveWaterOnlyTarget(baseTarget, mmsi, footprintRadius);
-      placementTarget = waterFallback.target;
-      boundaryScale = waterFallback.boundaryScale;
-    }
 
-    // New ship — place in water with boundary + collision checks.
+    // New ship — render only when direct placement is valid.
     if (!placementTarget) {
       hiddenByBoundary += 1;
       continue;
@@ -662,7 +806,7 @@ export function reconcileShips(
       color: hullColor,
       gradientMap: toonGradient,
       transparent: true,
-      opacity: shouldUsePassengerFerryModel(category, passengerFerryPrototype) ? 0 : 1,
+      opacity: shouldUseShipModel(category, passengerFerryPrototype, containerShipPrototype) ? 0 : 1,
     });
     const hull = new THREE.Mesh(hullGeometry, hullMaterial) as ShipMesh;
     hull.castShadow = false;
@@ -683,13 +827,20 @@ export function reconcileShips(
         polygonOffsetUnits: -1,
       }),
     );
-    wake.position.set(0, -SHIP_BASE_Y + WAKE_WORLD_Y, -16);
+    wake.position.set(0, -SHIP_BASE_Y + WAKE_WORLD_Y, -4);
+    wake.rotation.y = Math.PI;
     wake.renderOrder = 4;
     hull.add(wake);
 
-    syncShipDetailMesh(hull, category, nextSizeScale, hullColor, passengerFerryPrototype);
+    syncShipDetailMesh(hull, category, nextSizeScale, hullColor, passengerFerryPrototype, containerShipPrototype);
 
-    const categoryVisual = createShipCategoryVisual(category, nextSizeScale, categoryTextures, passengerFerryPrototype);
+    const categoryVisual = createShipCategoryVisual(
+      category,
+      nextSizeScale,
+      categoryTextures,
+      passengerFerryPrototype,
+      containerShipPrototype,
+    );
     if (categoryVisual) {
       hull.add(categoryVisual);
     }
@@ -711,11 +862,13 @@ export function reconcileShips(
       ship,
       target: spawnTarget.clone(),
       motion: {
+        prevAnchorPosition: spawnTarget.clone(),
+        prevAnchorTimeMs: ship.lastPositionUpdate,
         anchorPosition: spawnTarget.clone(),
         anchorTimeMs: ship.lastPositionUpdate,
         correction: new THREE.Vector3(),
         speedKnots: sanitizeShipSpeedKnots(ship.sog),
-        courseDeg: sanitizeCourseDeg(ship.cog, ship.heading),
+        courseDeg: sanitizeCourseDeg(ship.heading, ship.cog),
         lastAnimateTimeMs: Date.now(),
       },
       wake,
@@ -727,6 +880,7 @@ export function reconcileShips(
       sizeScale: nextSizeScale,
       boundaryScale,
       hiddenByBoundary: false,
+      invalidPositionStrikes: 0,
       nextBoundaryCheckAt: Date.now() + SHIP_BOUNDARY_RECHECK_INTERVAL_MS,
     } as ShipMarkerData;
 
@@ -765,9 +919,10 @@ export function reconcileShips(
       apiShips: ships.size,
       renderedShips: nextShipIds.size,
       skippedNoPosition,
+      skippedOnLand,
+      skippedByBudget,
       createdMarkers,
       updatedMarkers,
-      fallbackPlacements,
       hiddenByBoundary,
     });
   }
@@ -803,9 +958,8 @@ export function animateShips(
     const currentZoomScale = currentEffectiveScale / Math.max(markerData.boundaryScale, 0.1);
     const blendedVisualScale = THREE.MathUtils.lerp(currentZoomScale, zoomScale, 0.35);
     marker.scale.setScalar(blendedVisualScale * markerData.boundaryScale);
-    let followStrength = isMoored ? 0.08 : 0.12;
-
     const motion = markerData.motion;
+    const frameDt = Math.max(0, now - motion.lastAnimateTimeMs);
     const elapsedSinceAnchor = Math.min(
       Math.max(0, now - motion.anchorTimeMs),
       SHIP_PREDICTION_MAX_MS,
@@ -816,13 +970,11 @@ export function animateShips(
       motion.speedKnots,
       elapsedSinceAnchor,
     );
-    const frameDt = Math.max(0, now - motion.lastAnimateTimeMs);
     applyExponentialCorrectionDecay(motion.correction, frameDt);
     motion.lastAnimateTimeMs = now;
-    markerData.target.copy(predicted.add(motion.correction));
-    if (isMoving && !isMoored) {
-      followStrength = 0.2;
-    }
+    const desiredTarget = predicted.add(motion.correction);
+    const targetAlpha = 1 - Math.exp(-frameDt / SHIP_TARGET_DAMPING_TAU_MS);
+    markerData.target.lerp(desiredTarget, THREE.MathUtils.clamp(targetAlpha, 0, 1));
 
     const boundaryRecheckInterval = isMoving
       ? SHIP_BOUNDARY_RECHECK_MOVING_INTERVAL_MS
@@ -834,25 +986,22 @@ export function animateShips(
       markerData.nextBoundaryCheckAt = now + boundaryRecheckInterval;
       const runtimeFootprint = getShipFootprintRadius(markerData.sizeScale);
       if (!isWorldCircleNavigable(markerData.target.x, markerData.target.z, runtimeFootprint * markerData.boundaryScale)) {
-        const waterFallback = resolveWaterOnlyTarget(
-          markerData.target,
-          markerData.mmsi,
-          runtimeFootprint,
-          markerData.boundaryScale,
-        );
-        if (!waterFallback.target) {
+        markerData.invalidPositionStrikes += 1;
+        if (markerData.invalidPositionStrikes >= SHIP_INVALID_POSITION_HIDE_STRIKES) {
           markerData.hiddenByBoundary = true;
           marker.visible = false;
           markerData.wake.visible = false;
           continue;
         }
-        markerData.boundaryScale = waterFallback.boundaryScale;
-        markerData.target.copy(waterFallback.target);
-        marker.scale.setScalar(blendedVisualScale * markerData.boundaryScale);
+      } else {
+        markerData.invalidPositionStrikes = 0;
+        markerData.hiddenByBoundary = false;
       }
     }
 
-    marker.position.lerp(markerData.target, followStrength);
+    const positionTau = isMoving && !isMoored ? SHIP_POSITION_DAMPING_TAU_MOVING_MS : SHIP_POSITION_DAMPING_TAU_IDLE_MS;
+    const positionAlpha = 1 - Math.exp(-frameDt / positionTau);
+    marker.position.lerp(markerData.target, THREE.MathUtils.clamp(positionAlpha, 0, 1));
 
     // Bobbing for anchored/moored vessels
     const bob = (isAnchored || isMoored)
@@ -864,15 +1013,15 @@ export function animateShips(
     marker.rotation.y = THREE.MathUtils.lerp(
       marker.rotation.y,
       (-ship.heading * Math.PI) / 180,
-      0.18,
+      0.1,
     );
 
     // Wake
     const wake = markerData.wake;
-    wake.visible = isMoving && !isMoored;
+    wake.visible = marker.visible && isMoving && !isMoored && hasVisibleShipBody(marker);
     const wakeScaleBase = markerData.sizeScale * markerData.boundaryScale;
-    wake.scale.x = markerData.wakeWidth * wakeScaleBase * (0.58 + Math.min(sanitizedSog / 13, 1.05));
-    wake.scale.z = markerData.wakeLength * wakeScaleBase * (0.72 + Math.min(sanitizedSog / 11, 1.24));
+    wake.scale.x = markerData.wakeWidth * wakeScaleBase * (0.24 + Math.min(sanitizedSog / 34, 0.24));
+    wake.scale.z = markerData.wakeLength * wakeScaleBase * (0.2 + Math.min(sanitizedSog / 30, 0.22));
     wake.material.opacity = WAKE_BASE_OPACITY + Math.min(sanitizedSog / 55, 0.14);
   }
 }

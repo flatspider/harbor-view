@@ -124,6 +124,8 @@ export interface ShipMarkerData {
   ship: import("../types/ais").ShipData;
   target: THREE.Vector3;
   motion: {
+    prevAnchorPosition: THREE.Vector3;
+    prevAnchorTimeMs: number;
     anchorPosition: THREE.Vector3;
     anchorTimeMs: number;
     correction: THREE.Vector3;
@@ -140,6 +142,7 @@ export interface ShipMarkerData {
   sizeScale: number;
   boundaryScale: number;
   hiddenByBoundary: boolean;
+  invalidPositionStrikes: number;
   nextBoundaryCheckAt: number;
 }
 

@@ -10,7 +10,7 @@ import type {
   MultiLineString,
 } from "geojson";
 
-const DEFAULT_BBOX: [number, number, number, number] = [-74.26, 40.48, -73.9, 40.78];
+const DEFAULT_BBOX: [number, number, number, number] = [-74.26, 40.48, -73.75, 40.78];
 const DEFAULT_OUTPUT = "public/assets/data/noaa-shoreline.geojson";
 const DEFAULT_COASTLINE_OUTPUT = "public/assets/data/harbor-coastline-lines.geojson";
 

@@ -50,7 +50,16 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:developers.google.com)",
       "WebFetch(domain:gtfs.org)",
-      "Bash(npx lattice:*)"
+      "Bash(npx lattice:*)",
+      "Bash(node:*)",
+      "WebFetch(domain:cannoneyed.com)",
+      "Bash(lattice branch-link:*)",
+      "mcp__playwright__browser_console_messages",
+      "mcp__playwright__browser_evaluate",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_run_code",
+      "WebFetch(domain:api.adsb.lol)",
+      "Bash(bunx tsc:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

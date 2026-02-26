@@ -277,7 +277,7 @@ Working Express backend (`server.ts`) relaying AISStream.io WebSocket data. Reac
 ## AIS Data Notes
 
 - **Protocol:** WebSocket (`wss://stream.aisstream.io/v0/stream`)
-- **NY Harbor bounding box:** `[[40.48, -74.26], [40.78, -73.90]]`
+- **NY Harbor bounding box:** `[[40.48, -74.26], [40.78, -73.75]]`
 - **Key gotcha:** Static data (ship name, type) arrives on a DIFFERENT message type and LESS frequently than position data. Must build a lookup table keyed by MMSI and merge both.
 - **Second gotcha:** Must send the subscription message within 3 seconds of connecting or the connection drops.
 

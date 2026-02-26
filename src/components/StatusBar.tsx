@@ -1,5 +1,6 @@
 interface StatusBarProps {
   shipCount: number;
+  aircraftCount: number;
   connectionStatus: "connecting" | "connected" | "disconnected" | "error";
 }
 
@@ -10,7 +11,7 @@ const STATUS_INDICATOR: Record<string, { color: string; label: string }> = {
   error: { color: "#da3633", label: "Error" },
 };
 
-export function StatusBar({ shipCount, connectionStatus }: StatusBarProps) {
+export function StatusBar({ shipCount, aircraftCount, connectionStatus }: StatusBarProps) {
   const status = STATUS_INDICATOR[connectionStatus];
 
   return (
@@ -27,6 +28,10 @@ export function StatusBar({ shipCount, connectionStatus }: StatusBarProps) {
         <div className="status-ship-count">
           <span className="ship-count-number">{shipCount}</span>
           <span>vessels</span>
+        </div>
+        <div className="status-ship-count">
+          <span className="ship-count-number">{aircraftCount}</span>
+          <span>aircraft</span>
         </div>
       </div>
     </div>

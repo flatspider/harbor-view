@@ -9,7 +9,7 @@ import type {
   MultiLineString,
 } from "geojson";
 
-const DEFAULT_BBOX: [number, number, number, number] = [-74.26, 40.48, -73.9, 40.9];
+const DEFAULT_BBOX: [number, number, number, number] = [-74.26, 40.48, -73.75, 40.9];
 const DEFAULT_OUTPUT = "public/assets/data/coastline-nj-harbor.geojson";
 
 interface Args {

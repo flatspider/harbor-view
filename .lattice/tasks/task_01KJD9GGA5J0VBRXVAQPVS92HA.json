@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-26T15:36:35Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-26T15:37:07Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJD9H5AK1G07SXQBJ7PWXDZH",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJD9GGA5J0VBRXVAQPVS92HA",
+  "last_event_id": "ev_01KJD9HFDGBC6WG53WT0NRNEB6",
+  "last_status_changed_at": "2026-02-26T15:37:07Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-73",
+  "status": "done",
+  "tags": null,
+  "title": "Fill ocean in NW/SE corners and keep coastline mask alignment",
+  "type": "task",
+  "updated_at": "2026-02-26T15:37:07Z",
+  "urgency": null
+}

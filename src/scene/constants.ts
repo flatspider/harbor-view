@@ -53,10 +53,12 @@ export const WORLD_WIDTH = Math.max(
   Math.round((GEO_EAST_WEST_KM * WORLD_UNITS_PER_KM) / TILE_SIZE) * TILE_SIZE,
 );
 
-export const LAND_BASE_HEIGHT = 12;
+export const LAND_BASE_HEIGHT = 5;
+export const LAND_SURFACE_Y = 2;
 export const RENDER_LAND_POLYGONS = true;
-export const SHIP_BASE_Y = 10;
-export const WAKE_WORLD_Y = 0.22;
+export const RENDER_SMOKE_SKYLINE = false;
+export const SHIP_BASE_Y = -0.5;
+export const WAKE_WORLD_Y = -0.8;
 export const WAKE_BASE_OPACITY = 0.09;
 export const SHIP_COLLISION_PADDING = 8;
 export const SHIP_PLACEMENT_STEP = 12;
@@ -121,6 +123,14 @@ export interface ShipMarkerData {
   mmsi: number;
   ship: import("../types/ais").ShipData;
   target: THREE.Vector3;
+  motion: {
+    anchorPosition: THREE.Vector3;
+    anchorTimeMs: number;
+    correction: THREE.Vector3;
+    speedKnots: number;
+    courseDeg: number;
+    lastAnimateTimeMs: number;
+  };
   wake: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
   baseColor: THREE.Color;
   category: ShipCategory;
@@ -128,9 +138,12 @@ export interface ShipMarkerData {
   wakeWidth: number;
   wakeLength: number;
   sizeScale: number;
+  boundaryScale: number;
+  hiddenByBoundary: boolean;
+  nextBoundaryCheckAt: number;
 }
 
-export type ShipMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+export type ShipMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshToonMaterial>;
 
 export interface WaterTile {
   mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;

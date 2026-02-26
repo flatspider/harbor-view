@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-26T15:41:17Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-26T15:41:50Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJD9SRRNTE7VT958V4ZEMJVR",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJD9S3FWPANJB4F7ZNWX33ST",
+  "last_event_id": "ev_01KJD9T45K7ATVD4AHNN4J093N",
+  "last_status_changed_at": "2026-02-26T15:41:50Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-74",
+  "status": "done",
+  "tags": null,
+  "title": "Expand ocean bounds to true land extents (unclamped)",
+  "type": "task",
+  "updated_at": "2026-02-26T15:41:50Z",
+  "urgency": null
+}

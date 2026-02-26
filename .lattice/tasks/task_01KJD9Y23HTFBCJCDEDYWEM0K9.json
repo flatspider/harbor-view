@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-26T15:43:59Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-26T15:45:00Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJD9ZEM2S13AQVYS6GBJ41CF",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJD9Y23HTFBCJCDEDYWEM0K9",
+  "last_event_id": "ev_01KJD9ZXZSR2ZKMDAFFQD7AEBA",
+  "last_status_changed_at": "2026-02-26T15:45:00Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-75",
+  "status": "done",
+  "tags": null,
+  "title": "Unclip North Hudson vessel stream and disable land-mask suppression for ship targets",
+  "type": "task",
+  "updated_at": "2026-02-26T15:45:00Z",
+  "urgency": null
+}

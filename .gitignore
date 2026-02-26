@@ -34,3 +34,5 @@ public/assets/data/**/*.shp
 public/assets/data/**/*.dbf
 public/assets/data/**/*.shx
 public/assets/data/**/*.prj
+
+public/models/*.glb

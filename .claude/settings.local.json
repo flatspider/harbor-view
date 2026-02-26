@@ -50,7 +50,8 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:developers.google.com)",
       "WebFetch(domain:gtfs.org)",
-      "Bash(npx lattice:*)"
+      "Bash(npx lattice:*)",
+      "Bash(node:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

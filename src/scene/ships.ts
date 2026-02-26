@@ -122,7 +122,7 @@ export function computeShipSizeScale(ship: ShipData, style: ShipCategoryStyle): 
   const fromLength = targetLengthUnits / 22;
   const fromBeam = targetBeamUnits / 8;
   const blended = fromLength * 0.75 + fromBeam * 0.25;
-  return Math.min(Math.max(blended * style.scale, 0.22), 1.1);
+  return Math.min(Math.max(blended * 3.0 * style.scale, 0.22), 1.3);
 }
 
 export function getShipCollisionRadius(ship: ShipData, style: ShipCategoryStyle): number {
@@ -247,7 +247,7 @@ export function reconcileShips(
         if (hitArea instanceof THREE.Mesh) {
           hitArea.geometry.dispose();
           hitArea.geometry = new THREE.SphereGeometry(
-            Math.max(6, Math.min(24, ship.lengthM > 0 ? ship.lengthM * WORLD_UNITS_PER_METER * 0.35 : 9)),
+            Math.max(8, Math.min(40, ship.lengthM > 0 ? ship.lengthM * WORLD_UNITS_PER_METER * 1.05 : 14)),
             12,
             12,
           );
@@ -299,7 +299,7 @@ export function reconcileShips(
 
     const hitArea = new THREE.Mesh(
       new THREE.SphereGeometry(
-        Math.max(6, Math.min(24, ship.lengthM > 0 ? ship.lengthM * WORLD_UNITS_PER_METER * 0.35 : 9)),
+        Math.max(8, Math.min(40, ship.lengthM > 0 ? ship.lengthM * WORLD_UNITS_PER_METER * 1.05 : 14)),
         12,
         12,
       ),
@@ -385,7 +385,7 @@ export function animateShips(
     const isAnchored = ship.navStatus === 1;
     const isMoored = ship.navStatus === 5;
     const isMoving = ship.sog > 2.4;
-    const blendedVisualScale = THREE.MathUtils.lerp(marker.scale.x || 1, zoomScale, 0.18);
+    const blendedVisualScale = THREE.MathUtils.lerp(marker.scale.x || 1, zoomScale, 0.35);
     marker.scale.setScalar(blendedVisualScale);
 
     // ── Time-based interpolation + dead reckoning ──
@@ -435,7 +435,7 @@ export function animateShips(
     // Wake
     const wake = markerData.wake;
     wake.visible = isMoving && !isMoored;
-    const wakeScaleBase = Math.max(markerData.sizeScale, 0.28);
+    const wakeScaleBase = markerData.sizeScale;
     wake.scale.x = markerData.wakeWidth * wakeScaleBase * (0.58 + Math.min(ship.sog / 13, 1.05));
     wake.scale.z = markerData.wakeLength * wakeScaleBase * (0.72 + Math.min(ship.sog / 11, 1.24));
     wake.material.opacity = WAKE_BASE_OPACITY + Math.min(ship.sog / 55, 0.14);

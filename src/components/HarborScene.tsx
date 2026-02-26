@@ -240,14 +240,15 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     const windParticles = createWindParticles(scene);
     windParticlesRef.current = windParticles;
 
-    const newTiles = createWaterTiles(scene);
-    tiles.push(...newTiles);
-
     void (async () => {
       if (RENDER_LAND_POLYGONS) {
         await loadLandPolygons(scene, abortController.signal);
       }
       if (abortController.signal.aborted) return;
+
+      const newTiles = createWaterTiles(scene);
+      tiles.push(...newTiles);
+
       if (RENDER_SMOKE_SKYLINE) {
         await loadSkylineSmoke(scene, abortController.signal);
       }
@@ -415,7 +416,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         0,
         1,
       );
-      const shipZoomScale = THREE.MathUtils.lerp(0.9, 2.3, Math.pow(zoomProgress, 0.72));
+      const shipZoomScale = THREE.MathUtils.lerp(0.9, 5.6, Math.pow(zoomProgress, 0.65));
       animateShips(shipMarkers, t, shipZoomScale);
       controls.update();
 

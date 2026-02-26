@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { Water } from "three/examples/jsm/objects/Water.js";
 import type { HarborEnvironment } from "../types/environment";
 import { landPolygonRings, isPointOnLand } from "./land";
-import { TILE_SIZE, WORLD_WIDTH, WORLD_DEPTH, worldToLonLat, type WaterTile } from "./constants";
+import { TILE_SIZE, WORLD_WIDTH, WORLD_DEPTH, latLonToWorld, worldToLonLat, type WaterTile } from "./constants";
 
 interface ShaderWaterTile {
   mesh: Water;
@@ -33,6 +33,13 @@ interface FlowCell {
   radius: number;
   strength: number;
   clockwise: boolean;
+}
+
+interface WaterBounds {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
 }
 
 const shaderTiles: ShaderWaterTile[] = [];
@@ -68,11 +75,7 @@ const FLOW_CELLS: FlowCell[] = [
   { x: WORLD_WIDTH * 0.04, z: WORLD_DEPTH * 0.18, radius: 280, strength: 0.36, clockwise: true },
 ];
 
-// East is mirrored to negative X in world space. Keep the footprint biased east + slightly north.
-const WATER_OVERSCAN_WEST = WORLD_WIDTH * 1.25;
-const WATER_OVERSCAN_EAST = WORLD_WIDTH * 1.4;
-const WATER_OVERSCAN_SOUTH = WORLD_DEPTH * 1.2;
-const WATER_OVERSCAN_NORTH = WORLD_DEPTH * 1.3;
+const WATER_SHORELINE_PAD = 12;
 const WATER_SUBDIVISIONS_PER_TILE = 18;
 const MIN_WATER_SUBDIVISIONS = 48;
 const FORCE_TEST_CURRENT = true;
@@ -85,6 +88,41 @@ function createWaterNormalsTexture(): THREE.Texture {
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
   return texture;
+}
+
+function getWaterBounds(): WaterBounds {
+  const halfWidth = WORLD_WIDTH * 0.5;
+  const halfDepth = WORLD_DEPTH * 0.5;
+  if (landPolygonRings.length === 0) {
+    return { minX: -halfWidth, maxX: halfWidth, minZ: -halfDepth, maxZ: halfDepth };
+  }
+
+  let minLon = Infinity;
+  let maxLon = -Infinity;
+  let minLat = Infinity;
+  let maxLat = -Infinity;
+  for (const ring of landPolygonRings) {
+    if (ring.minLon < minLon) minLon = ring.minLon;
+    if (ring.maxLon > maxLon) maxLon = ring.maxLon;
+    if (ring.minLat < minLat) minLat = ring.minLat;
+    if (ring.maxLat > maxLat) maxLat = ring.maxLat;
+  }
+
+  if (!Number.isFinite(minLon) || !Number.isFinite(maxLon) || !Number.isFinite(minLat) || !Number.isFinite(maxLat)) {
+    return { minX: -halfWidth, maxX: halfWidth, minZ: -halfDepth, maxZ: halfDepth };
+  }
+
+  const westX = latLonToWorld(minLat, minLon).x;
+  const eastX = latLonToWorld(minLat, maxLon).x;
+  const southZ = latLonToWorld(minLat, minLon).z;
+  const northZ = latLonToWorld(maxLat, minLon).z;
+
+  return {
+    minX: THREE.MathUtils.clamp(Math.min(westX, eastX) - WATER_SHORELINE_PAD, -halfWidth, halfWidth),
+    maxX: THREE.MathUtils.clamp(Math.max(westX, eastX) + WATER_SHORELINE_PAD, -halfWidth, halfWidth),
+    minZ: THREE.MathUtils.clamp(Math.min(southZ, northZ) - WATER_SHORELINE_PAD, -halfDepth, halfDepth),
+    maxZ: THREE.MathUtils.clamp(Math.max(southZ, northZ) + WATER_SHORELINE_PAD, -halfDepth, halfDepth),
+  };
 }
 
 function isLandAtWorldPoint(x: number, z: number, outOfBoundsIsLand = true): boolean {
@@ -315,10 +353,7 @@ export function createWaterTiles(scene: THREE.Scene): WaterTile[] {
   _waterShaderTime = 0;
   _normalDrift.set(0, 0);
 
-  const minX = -WORLD_WIDTH * 0.5 - WATER_OVERSCAN_EAST;
-  const maxX = WORLD_WIDTH * 0.5 + WATER_OVERSCAN_WEST;
-  const minZ = -WORLD_DEPTH * 0.5 - WATER_OVERSCAN_SOUTH;
-  const maxZ = WORLD_DEPTH * 0.5 + WATER_OVERSCAN_NORTH;
+  const { minX, maxX, minZ, maxZ } = getWaterBounds();
 
   const width = maxX - minX;
   const depth = maxZ - minZ;

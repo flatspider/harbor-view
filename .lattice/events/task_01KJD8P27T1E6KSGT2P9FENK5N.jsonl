@@ -1,0 +1,4 @@
+{"actor":"agent:codex","data":{"priority":"medium","short_id":"HAR-72","status":"backlog","title":"Align ocean footprint to land polygon edges","type":"task"},"id":"ev_01KJD8P27VGZXX42D77QQP9HTW","schema_version":1,"task_id":"task_01KJD8P27T1E6KSGT2P9FENK5N","ts":"2026-02-26T15:22:09Z","type":"task_created"}
+{"actor":"agent:codex","data":{"from":"backlog","to":"in_planning"},"id":"ev_01KJD8PFGXABV84WNP23B3AQ8W","schema_version":1,"task_id":"task_01KJD8P27T1E6KSGT2P9FENK5N","ts":"2026-02-26T15:22:22Z","type":"status_changed"}
+{"actor":"agent:codex","data":{"from":"in_planning","to":"planned"},"id":"ev_01KJD8PSAVYT9ZTHY9C4QD4DK5","schema_version":1,"task_id":"task_01KJD8P27T1E6KSGT2P9FENK5N","ts":"2026-02-26T15:22:32Z","type":"status_changed"}
+{"actor":"agent:codex","data":{"from":"planned","to":"in_progress"},"id":"ev_01KJD8PWG6KHMJYCQS6YKAK6W5","schema_version":1,"task_id":"task_01KJD8P27T1E6KSGT2P9FENK5N","ts":"2026-02-26T15:22:35Z","type":"status_changed"}

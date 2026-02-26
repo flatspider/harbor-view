@@ -1,26 +1,32 @@
 {
   "assigned_to": null,
   "branch_links": [],
-  "comment_count": 0,
+  "comment_count": 1,
   "complexity": null,
   "created_at": "2026-02-25T19:50:08Z",
   "created_by": "agent:claude-opus-4-orchestrator",
   "custom_fields": {},
   "description": null,
-  "done_at": null,
-  "evidence_refs": [],
+  "done_at": "2026-02-25T20:48:52Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJB8ZKCAVAN2QG4ZVCMFPE33",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
   "id": "task_01KJB5M1V4MRZG0XM8JK0C6523",
-  "last_event_id": "ev_01KJB5P43DAD35QD1VDRX3APH7",
-  "last_status_changed_at": "2026-02-25T19:51:16Z",
+  "last_event_id": "ev_01KJB8ZKEFHPKD0BR4ZJ7J56KJ",
+  "last_status_changed_at": "2026-02-25T20:48:52Z",
   "priority": "medium",
   "relationships_out": [],
   "reopened_count": 0,
   "schema_version": 1,
   "short_id": "HAR-51",
-  "status": "in_progress",
+  "status": "done",
   "tags": null,
   "title": "CI/CD pipeline + Postgres database for Harbor Watch",
   "type": "task",
-  "updated_at": "2026-02-25T19:51:16Z",
+  "updated_at": "2026-02-25T20:48:52Z",
   "urgency": null
 }

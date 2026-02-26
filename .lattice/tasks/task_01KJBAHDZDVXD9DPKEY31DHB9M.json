@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-25T21:16:05Z",
+  "created_by": "agent:claude-opus-4-orchestrator",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-25T21:20:07Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJBARSWXG4TTZ403KFYTMBYM",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJBAHDZDVXD9DPKEY31DHB9M",
+  "last_event_id": "ev_01KJBARSZ7BF3V74908GDB21VN",
+  "last_status_changed_at": "2026-02-25T21:20:07Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-56",
+  "status": "done",
+  "tags": null,
+  "title": "Add Ghibli-style painted harbor background asset pipeline and rendering",
+  "type": "task",
+  "updated_at": "2026-02-25T21:20:07Z",
+  "urgency": null
+}

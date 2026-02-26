@@ -33,7 +33,28 @@
       "Bash(docker build:*)",
       "Bash(sleep 5 && curl -s --connect-timeout 5 --max-time 10 http://35.172.150.216/api/health 2>&1)",
       "Bash(lattice show:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(gh run:*)",
+      "Bash(lattice comment:*)",
+      "Bash(lsof:*)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_wait_for",
+      "Bash(wc:*)",
+      "WebFetch(domain:tidesandcurrents.noaa.gov)",
+      "WebFetch(domain:api.tidesandcurrents.noaa.gov)",
+      "Bash(curl:*)",
+      "WebFetch(domain:www.ferry.nyc)",
+      "WebFetch(domain:nycferry.connexionz.net)",
+      "WebFetch(domain:www.tidesandcurrents.noaa.gov)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:developers.google.com)",
+      "WebFetch(domain:gtfs.org)",
+      "Bash(npx lattice:*)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "playwright"
+  ]
 }

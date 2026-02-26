@@ -77,6 +77,93 @@ body {
   pointer-events: none;
 }
 
+.sky-controls {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 13;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.sky-controls-toggle,
+.sky-controls-reset {
+  border: 1px solid rgba(201, 168, 76, 0.35);
+  border-radius: 8px;
+  background: rgba(8, 18, 34, 0.82);
+  color: #d9e3ec;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+}
+
+.sky-controls-toggle {
+  padding: 8px 10px;
+}
+
+.sky-controls-panel {
+  width: min(320px, calc(100vw - 32px));
+  padding: 10px 12px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(201, 168, 76, 0.28);
+  background: rgba(7, 18, 32, 0.9);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+}
+
+.sky-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.sky-controls-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #d9e3ec;
+}
+
+.sky-controls-reset {
+  padding: 4px 8px;
+}
+
+.sky-control-row {
+  display: grid;
+  grid-template-columns: 78px 1fr 48px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.sky-control-row span {
+  font-size: 11px;
+  color: #a8bccf;
+}
+
+.sky-control-row input[type="range"] {
+  width: 100%;
+}
+
+.sky-control-row output {
+  text-align: right;
+  font-size: 11px;
+  color: #e8edf2;
+  font-variant-numeric: tabular-nums;
+}
+
+.sky-controls-note {
+  margin-top: 8px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: #8b9daa;
+}
+
 .harbor-alert-glow {
   position: absolute;
   inset: 0;
@@ -590,4 +677,20 @@ body {
 
 .api-key-form button:hover {
   background: #d4b560;
+}
+
+@media (max-width: 720px) {
+  .sky-controls {
+    top: 12px;
+    right: 12px;
+  }
+
+  .sky-controls-panel {
+    width: min(290px, calc(100vw - 24px));
+  }
+
+  .sky-control-row {
+    grid-template-columns: 70px 1fr 44px;
+    gap: 6px;
+  }
 }

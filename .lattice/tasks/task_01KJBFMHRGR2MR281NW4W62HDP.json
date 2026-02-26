@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-25T22:45:10Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-25T22:46:35Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJBFQ4FM18G43CZWFE52GH0D",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJBFMHRGR2MR281NW4W62HDP",
+  "last_event_id": "ev_01KJBFQ4HSSXYJ8WP86RCCXZ7Q",
+  "last_status_changed_at": "2026-02-25T22:46:35Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-67",
+  "status": "done",
+  "tags": null,
+  "title": "Remove under-polygon ocean skirt artifact",
+  "type": "task",
+  "updated_at": "2026-02-25T22:46:35Z",
+  "urgency": null
+}

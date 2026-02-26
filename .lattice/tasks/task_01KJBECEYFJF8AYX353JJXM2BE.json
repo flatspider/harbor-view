@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-25T22:23:16Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-25T22:24:27Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJBEEKCVXTY31GGW38C4WZDQ",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJBECEYFJF8AYX353JJXM2BE",
+  "last_event_id": "ev_01KJBEEKG5AD1EH3EVVJ03DTPD",
+  "last_status_changed_at": "2026-02-25T22:24:27Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-62",
+  "status": "done",
+  "tags": null,
+  "title": "Make ocean motion visibly current-driven",
+  "type": "task",
+  "updated_at": "2026-02-25T22:24:27Z",
+  "urgency": null
+}

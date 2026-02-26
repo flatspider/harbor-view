@@ -16,6 +16,7 @@
     "data:build-harbor-land": "bun run scripts/build-harbor-land-from-coastline.ts",
     "data:build-nj-land": "bun run scripts/build-nj-land-from-coastline.ts",
     "data:merge-harbor-land": "bun run scripts/merge-harbor-land.ts",
+    "fetch-ferry-routes": "bun run scripts/fetch-ferry-routes.ts",
     "preview": "NODE_ENV=production bun run server.ts"
   },
   "dependencies": {

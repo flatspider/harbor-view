@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-25T21:20:15Z",
+  "created_by": "agent:claude-opus-4-orchestrator",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-25T21:22:10Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJBAWHXETXJCAMMF3YMBCNTC",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJBAS1ZB4ZJV2WWVWH8TB2NK",
+  "last_event_id": "ev_01KJBAWHZR4VKR7DA2TW7Y84E2",
+  "last_status_changed_at": "2026-02-25T21:22:10Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-57",
+  "status": "done",
+  "tags": null,
+  "title": "Implement ocean displacement effect with masked water region (Three.js shader)",
+  "type": "task",
+  "updated_at": "2026-02-25T21:22:10Z",
+  "urgency": null
+}

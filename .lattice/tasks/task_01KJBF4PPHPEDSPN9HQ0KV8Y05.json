@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-25T22:36:31Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-25T22:38:06Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJBF7KH4JYN186GXGAA05HCX",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJBF4PPHPEDSPN9HQ0KV8Y05",
+  "last_event_id": "ev_01KJBF7KKG43XKYN71JZ7AA2XY",
+  "last_status_changed_at": "2026-02-25T22:38:06Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-66",
+  "status": "done",
+  "tags": null,
+  "title": "Make water motion strictly follow current speed/direction",
+  "type": "task",
+  "updated_at": "2026-02-25T22:38:06Z",
+  "urgency": null
+}

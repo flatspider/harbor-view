@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-25T22:29:04Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-25T22:31:00Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJBETM0915T7T47MMTM9FW3F",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJBEQ24PSPVVFHC9AJEVY7E7",
+  "last_event_id": "ev_01KJBETM2RRE6JJX0Z5MBMGC45",
+  "last_status_changed_at": "2026-02-25T22:31:00Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-63",
+  "status": "done",
+  "tags": null,
+  "title": "Add full-screen ocean underlay and eliminate ocean-land seam box",
+  "type": "task",
+  "updated_at": "2026-02-25T22:31:00Z",
+  "urgency": null
+}

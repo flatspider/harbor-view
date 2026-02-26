@@ -29,7 +29,7 @@ import difference from "@turf/difference";
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
-const BBOX: [number, number, number, number] = [-74.26, 40.48, -73.9, 40.78];
+const BBOX: [number, number, number, number] = [-74.26, 40.48, -73.9, 40.9];
 const [WEST, SOUTH, EAST, NORTH] = BBOX;
 
 const COUNTIES_INPUT = "public/assets/data/nj-counties-500k.geojson";

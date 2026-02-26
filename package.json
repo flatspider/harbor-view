@@ -20,6 +20,8 @@
     "data:clean-land": "bun run scripts/clean-land-polygons.ts",
     "fetch-ferry-routes": "bun run scripts/fetch-ferry-routes.ts",
     "assets:optimize-passenger-ferry": "bunx gltf-transform optimize public/models/Meshy_AI_Orange_Ferry_at_Sea_0226181516_texture.glb public/models/passenger-ferry-optimized.glb --compress draco --texture-compress auto --texture-size 512 --simplify-ratio 0 --simplify-error 0.01",
+    "assets:optimize-container-ship": "bunx gltf-transform optimize public/models/Meshy_AI_Colorful_Container_Sh_0226194049_texture.glb public/models/container-ship-optimized.glb --compress draco --texture-compress auto --texture-size 512 --simplify-ratio 0 --simplify-error 0.01",
+    "assets:optimize-airplane": "bunx gltf-transform optimize public/models/Meshy_AI_Skybound_Ark_0226195620_texture.glb public/models/airplane-optimized.glb --compress draco --texture-compress auto --texture-size 512 --simplify-ratio 0 --simplify-error 0.01",
     "preview": "NODE_ENV=production bun run server.ts"
   },
   "dependencies": {

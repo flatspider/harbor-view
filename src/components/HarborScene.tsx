@@ -51,6 +51,8 @@ import {
   type FerryRouteInfo,
 } from "../scene/ferryRoutes";
 import { loadShipCategoryTextures, type ShipCategoryTextureMap } from "../scene/shipTextures";
+import { loadAirplanePrototype } from "../scene/airplaneModel";
+import { loadContainerShipPrototype } from "../scene/containerShipModel";
 import { loadPassengerFerryPrototype } from "../scene/passengerFerryModel";
 
 interface HarborSceneProps {
@@ -230,7 +232,10 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
   const environmentRef = useRef(environment);
   const shipCategoryTexturesRef = useRef<ShipCategoryTextureMap | null>(null);
   const passengerFerryPrototypeRef = useRef<THREE.Object3D | null>(null);
+  const containerShipPrototypeRef = useRef<THREE.Object3D | null>(null);
+  const airplanePrototypeRef = useRef<THREE.Object3D | null>(null);
   const [shipVisualAssetsRevision, setShipVisualAssetsRevision] = useState(0);
+  const [aircraftVisualAssetsRevision, setAircraftVisualAssetsRevision] = useState(0);
   const [skyAutoMode, setSkyAutoMode] = useState(true);
   const [skyPanelOpen, setSkyPanelOpen] = useState(false);
   const [manualSkySettings, setManualSkySettings] = useState<SkySettings>(() => getDefaultSkySettings());
@@ -433,6 +438,7 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
 
     void (async () => {
       let visualAssetsUpdated = false;
+      let aircraftAssetsUpdated = false;
       const visualLoadTasks: Promise<void>[] = [];
 
       if (!shipCategoryTexturesRef.current) {
@@ -463,6 +469,34 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
         );
       }
 
+      if (!containerShipPrototypeRef.current) {
+        visualLoadTasks.push(
+          loadContainerShipPrototype()
+            .then((prototype) => {
+              if (abortController.signal.aborted) return;
+              containerShipPrototypeRef.current = prototype;
+              visualAssetsUpdated = true;
+            })
+            .catch((error) => {
+              console.error("[harbor] Failed to load container ship model", error);
+            }),
+        );
+      }
+
+      if (!airplanePrototypeRef.current) {
+        visualLoadTasks.push(
+          loadAirplanePrototype()
+            .then((prototype) => {
+              if (abortController.signal.aborted) return;
+              airplanePrototypeRef.current = prototype;
+              aircraftAssetsUpdated = true;
+            })
+            .catch((error) => {
+              console.error("[harbor] Failed to load airplane model", error);
+            }),
+        );
+      }
+
       if (RENDER_LAND_POLYGONS) {
         await loadLandPolygons(scene, abortController.signal);
       }
@@ -484,6 +518,9 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
       }
       if (visualAssetsUpdated && !abortController.signal.aborted) {
         setShipVisualAssetsRevision((prev) => prev + 1);
+      }
+      if (aircraftAssetsUpdated && !abortController.signal.aborted) {
+        setAircraftVisualAssetsRevision((prev) => prev + 1);
       }
     })();
 
@@ -745,6 +782,7 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
         scene.remove(marker);
         marker.traverse((child) => {
           if (child instanceof THREE.Mesh) {
+            if ((child.userData as { sharedAircraftModelAsset?: boolean }).sharedAircraftModelAsset === true) return;
             child.geometry.dispose();
             if (child.material instanceof THREE.Material) child.material.dispose();
           }
@@ -782,6 +820,7 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
       hoveredShipRef,
       shipCategoryTexturesRef.current ?? undefined,
       passengerFerryPrototypeRef.current ?? undefined,
+      containerShipPrototypeRef.current ?? undefined,
     );
   }, [ships, shipVisualAssetsRevision]);
 
@@ -790,8 +829,8 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
   useEffect(() => {
     const scene = sceneInstanceRef.current;
     if (!scene) return;
-    reconcileAircraft(scene, aircraft, aircraftMarkersRef.current);
-  }, [aircraft]);
+    reconcileAircraft(scene, aircraft, aircraftMarkersRef.current, airplanePrototypeRef.current ?? undefined);
+  }, [aircraft, aircraftVisualAssetsRevision]);
 
   /* ── Render ────────────────────────────────────────────────────────── */
 

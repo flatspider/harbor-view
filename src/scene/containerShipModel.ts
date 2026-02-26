@@ -2,58 +2,51 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 
-interface PassengerFerryMetrics {
+interface ContainerShipMetrics {
   length: number;
   height: number;
   headingRotation: number;
 }
 
-const PASSENGER_FERRY_MODEL_URL = "/models/passenger-ferry-optimized.glb";
-const PASSENGER_FERRY_FALLBACK_MODEL_URL = "/models/Meshy_AI_Orange_Ferry_at_Sea_0226181516_texture.glb";
+const CONTAINER_SHIP_MODEL_URL = "/models/container-ship-optimized.glb";
+const CONTAINER_SHIP_FALLBACK_MODEL_URL = "/models/Meshy_AI_Colorful_Container_Sh_0226194049_texture.glb";
 const DRACO_DECODER_PATH = "/draco/";
-const PASSENGER_FERRY_TARGET_LENGTH = 21;
-const PASSENGER_FERRY_BASE_Y = 5.2;
-const PASSENGER_FERRY_SINK_RATIO = 0.36;
-const PASSENGER_FERRY_MODEL_NAME = "ship-category-model";
-const PASSENGER_FERRY_METRICS_KEY = "__passengerFerryMetrics";
-const PASSENGER_FERRY_SHARED_ASSET_KEY = "sharedShipModelAsset";
-const PASSENGER_FERRY_STYLED_MATERIAL_KEY = "__passengerFerryStyledMaterial";
+const CONTAINER_SHIP_TARGET_LENGTH = 25;
+const CONTAINER_SHIP_BASE_Y = 5.2;
+const CONTAINER_SHIP_SINK_RATIO = 0.34;
+const CONTAINER_SHIP_MODEL_NAME = "ship-category-model";
+const CONTAINER_SHIP_METRICS_KEY = "__containerShipMetrics";
+const CONTAINER_SHIP_SHARED_ASSET_KEY = "sharedShipModelAsset";
+const CONTAINER_SHIP_STYLED_MATERIAL_KEY = "__containerShipStyledMaterial";
 
 const _hsl = { h: 0, s: 0, l: 0 };
 
-function applyVibrantBoatLook(material: THREE.Material): void {
-  const flagged = (material.userData as { __passengerFerryStyledMaterial?: boolean })[PASSENGER_FERRY_STYLED_MATERIAL_KEY];
+let containerShipLoadPromise: Promise<THREE.Object3D> | null = null;
+
+function applyContainerShipLook(material: THREE.Material): void {
+  const flagged = (material.userData as { __containerShipStyledMaterial?: boolean })[CONTAINER_SHIP_STYLED_MATERIAL_KEY];
   if (flagged) return;
 
   if (material instanceof THREE.MeshStandardMaterial || material instanceof THREE.MeshPhysicalMaterial) {
     material.color.getHSL(_hsl);
-    let h = _hsl.h;
-    let s = _hsl.s;
-    let l = _hsl.l;
-
-    // Keep the ferry in an orange lane (avoid blood-red drift after grading).
-    if ((h < 0.04 || h > 0.96) && s > 0.25) h = 0.085;
-    else if (h >= 0.04 && h <= 0.2) h = THREE.MathUtils.lerp(h, 0.1, 0.65);
-
-    s = Math.min(1, s * 1.18 + 0.06);
-    l = Math.min(0.68, l * 1.12 + 0.05);
-    material.color.setHSL(h, s, l);
-
-    material.metalness = Math.min(material.metalness, 0.05);
-    material.roughness = Math.max(material.roughness, 0.62);
-    material.emissive.copy(material.color).multiplyScalar(0.08);
-    material.emissiveIntensity = 0.28;
-    material.toneMapped = true;
+    material.color.setHSL(
+      _hsl.h,
+      Math.min(1, _hsl.s * 1.2 + 0.05),
+      Math.min(0.72, _hsl.l * 1.22 + 0.06),
+    );
+    material.metalness = Math.min(material.metalness, 0.08);
+    material.roughness = Math.max(material.roughness, 0.58);
+    material.emissive.copy(material.color).multiplyScalar(0.12);
+    material.emissiveIntensity = 0.36;
+    material.toneMapped = false;
     if (material.map) material.map.colorSpace = THREE.SRGBColorSpace;
     material.needsUpdate = true;
   }
 
-  material.userData[PASSENGER_FERRY_STYLED_MATERIAL_KEY] = true;
+  material.userData[CONTAINER_SHIP_STYLED_MATERIAL_KEY] = true;
 }
 
-let passengerFerryLoadPromise: Promise<THREE.Object3D> | null = null;
-
-function normalizePrototype(prototype: THREE.Object3D): PassengerFerryMetrics {
+function normalizePrototype(prototype: THREE.Object3D): ContainerShipMetrics {
   prototype.updateMatrixWorld(true);
 
   const bounds = new THREE.Box3().setFromObject(prototype);
@@ -68,32 +61,31 @@ function normalizePrototype(prototype: THREE.Object3D): PassengerFerryMetrics {
   const planarLength = Math.max(size.x, size.z, 0.001);
   const headingRotation = size.x >= size.z ? Math.PI / 2 : 0;
 
-  const metrics: PassengerFerryMetrics = {
+  const metrics: ContainerShipMetrics = {
     length: planarLength,
     height: Math.max(size.y, 0.001),
     headingRotation,
   };
-  prototype.userData[PASSENGER_FERRY_METRICS_KEY] = metrics;
+  prototype.userData[CONTAINER_SHIP_METRICS_KEY] = metrics;
 
   prototype.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
     child.castShadow = false;
     child.receiveShadow = false;
     child.renderOrder = 6;
-    child.userData[PASSENGER_FERRY_SHARED_ASSET_KEY] = true;
-
+    child.userData[CONTAINER_SHIP_SHARED_ASSET_KEY] = true;
     if (Array.isArray(child.material)) {
-      for (const material of child.material) applyVibrantBoatLook(material);
+      for (const material of child.material) applyContainerShipLook(material);
     } else {
-      applyVibrantBoatLook(child.material);
+      applyContainerShipLook(child.material);
     }
   });
 
   return metrics;
 }
 
-function getMetrics(prototype: THREE.Object3D): PassengerFerryMetrics {
-  const stored = prototype.userData[PASSENGER_FERRY_METRICS_KEY] as Partial<PassengerFerryMetrics> | undefined;
+function getMetrics(prototype: THREE.Object3D): ContainerShipMetrics {
+  const stored = prototype.userData[CONTAINER_SHIP_METRICS_KEY] as Partial<ContainerShipMetrics> | undefined;
   if (
     stored &&
     typeof stored.length === "number" &&
@@ -123,7 +115,7 @@ function loadModel(url: string, useDraco: boolean): Promise<THREE.Object3D> {
       (gltf) => {
         dracoLoader?.dispose();
         if (!gltf.scene) {
-          reject(new Error(`Passenger ferry model has no scene: ${url}`));
+          reject(new Error(`Container ship model has no scene: ${url}`));
           return;
         }
         resolve(gltf.scene);
@@ -137,49 +129,49 @@ function loadModel(url: string, useDraco: boolean): Promise<THREE.Object3D> {
   });
 }
 
-export function loadPassengerFerryPrototype(): Promise<THREE.Object3D> {
-  if (passengerFerryLoadPromise) return passengerFerryLoadPromise;
+export function loadContainerShipPrototype(): Promise<THREE.Object3D> {
+  if (containerShipLoadPromise) return containerShipLoadPromise;
 
-  passengerFerryLoadPromise = (async () => {
+  containerShipLoadPromise = (async () => {
     try {
-      const optimizedPrototype = await loadModel(PASSENGER_FERRY_MODEL_URL, true);
+      const optimizedPrototype = await loadModel(CONTAINER_SHIP_MODEL_URL, true);
       normalizePrototype(optimizedPrototype);
       return optimizedPrototype;
     } catch {
-      const fallbackPrototype = await loadModel(PASSENGER_FERRY_FALLBACK_MODEL_URL, false);
+      const fallbackPrototype = await loadModel(CONTAINER_SHIP_FALLBACK_MODEL_URL, false);
       normalizePrototype(fallbackPrototype);
       return fallbackPrototype;
     }
   })().catch((error) => {
-    passengerFerryLoadPromise = null;
+    containerShipLoadPromise = null;
     throw error;
   });
 
-  return passengerFerryLoadPromise;
+  return containerShipLoadPromise;
 }
 
-export function createPassengerFerryModelInstance(
+export function createContainerShipModelInstance(
   prototype: THREE.Object3D,
   sizeScale: number,
 ): THREE.Object3D {
   const metrics = getMetrics(prototype);
   const visualScale = Math.max(sizeScale, 0.22);
-  const targetLength = PASSENGER_FERRY_TARGET_LENGTH * visualScale;
+  const targetLength = CONTAINER_SHIP_TARGET_LENGTH * visualScale;
   const modelScale = targetLength / Math.max(metrics.length, 0.001);
   const modelHeight = metrics.height * modelScale;
-  const sinkOffset = modelHeight * PASSENGER_FERRY_SINK_RATIO;
+  const sinkOffset = modelHeight * CONTAINER_SHIP_SINK_RATIO;
 
   const instance = prototype.clone(true);
-  instance.name = PASSENGER_FERRY_MODEL_NAME;
+  instance.name = CONTAINER_SHIP_MODEL_NAME;
   instance.renderOrder = 6;
   instance.scale.setScalar(modelScale);
   instance.rotation.y = metrics.headingRotation;
-  instance.position.set(0, PASSENGER_FERRY_BASE_Y * visualScale - sinkOffset, 0);
+  instance.position.set(0, CONTAINER_SHIP_BASE_Y * visualScale - sinkOffset, 0);
 
   instance.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
     child.renderOrder = 6;
-    child.userData[PASSENGER_FERRY_SHARED_ASSET_KEY] = true;
+    child.userData[CONTAINER_SHIP_SHARED_ASSET_KEY] = true;
   });
 
   return instance;

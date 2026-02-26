@@ -258,10 +258,77 @@ const SHIP_WATER_FALLBACK_RADIUS = 120;
 const SHIP_POSITION_RECONCILE_EPSILON = 0.000015;
 const SHIP_BOUNDARY_RECHECK_INTERVAL_MS = 900;
 const SHIP_BOUNDARY_RECHECK_MOVING_INTERVAL_MS = 450;
+const SHIP_PREDICTION_MAX_MS = 25_000;
+const SHIP_CORRECTION_HALF_LIFE_MS = 2_500;
+const SHIP_MAX_SPEED_KNOTS = 55;
+const AIS_SOG_UNAVAILABLE_THRESHOLD = 102.2;
+const SHIP_POSITION_NOISE_RADIUS = 0.55;
 
 interface ResolvedShipTarget {
   target: THREE.Vector3 | null;
   boundaryScale: number;
+}
+
+function projectPositionFromCourseAndSpeed(
+  anchor: THREE.Vector3,
+  courseDeg: number,
+  speedKnots: number,
+  elapsedMs: number,
+): THREE.Vector3 {
+  if (speedKnots <= 0 || elapsedMs <= 0) return anchor.clone();
+  const headingRad = (courseDeg * Math.PI) / 180;
+  const distanceUnits = speedKnots * KNOTS_TO_WORLD_PER_MS * elapsedMs;
+  return new THREE.Vector3(
+    anchor.x - Math.sin(headingRad) * distanceUnits,
+    anchor.y,
+    anchor.z + Math.cos(headingRad) * distanceUnits,
+  );
+}
+
+function sanitizeShipSpeedKnots(rawSog: number): number {
+  if (!Number.isFinite(rawSog) || rawSog <= 0) return 0;
+  if (rawSog >= AIS_SOG_UNAVAILABLE_THRESHOLD) return 0;
+  return Math.min(rawSog, SHIP_MAX_SPEED_KNOTS);
+}
+
+function sanitizeCourseDeg(rawCog: number, fallbackDeg = 0): number {
+  if (!Number.isFinite(rawCog)) return fallbackDeg;
+  const normalized = ((rawCog % 360) + 360) % 360;
+  return normalized;
+}
+
+function applyExponentialCorrectionDecay(correction: THREE.Vector3, dtMs: number): void {
+  if (dtMs <= 0) return;
+  const decay = Math.exp((-Math.LN2 * dtMs) / SHIP_CORRECTION_HALF_LIFE_MS);
+  correction.multiplyScalar(decay);
+}
+
+function updateShipMotionFromTelemetry(
+  markerData: ShipMarkerData,
+  measuredTarget: THREE.Vector3,
+  measuredAtMs: number,
+  sog: number,
+  cog: number,
+): void {
+  const sampleTime = Math.max(0, measuredAtMs);
+  const previousMotion = markerData.motion;
+  const sanitizedSpeed = sanitizeShipSpeedKnots(sog);
+  const sanitizedCourse = sanitizeCourseDeg(cog, previousMotion.courseDeg);
+  const predictedAtSample = projectPositionFromCourseAndSpeed(
+    previousMotion.anchorPosition,
+    previousMotion.courseDeg,
+    previousMotion.speedKnots,
+    Math.min(Math.max(0, sampleTime - previousMotion.anchorTimeMs), SHIP_PREDICTION_MAX_MS),
+  ).add(previousMotion.correction);
+
+  const residual = measuredTarget.clone().sub(predictedAtSample);
+  if (residual.lengthSq() > SHIP_POSITION_NOISE_RADIUS * SHIP_POSITION_NOISE_RADIUS) {
+    previousMotion.correction.add(residual);
+  }
+  previousMotion.anchorPosition.copy(measuredTarget);
+  previousMotion.anchorTimeMs = sampleTime;
+  previousMotion.speedKnots = sanitizedSpeed;
+  previousMotion.courseDeg = sanitizedCourse;
 }
 
 export function getShipFootprintRadius(sizeScale: number): number {
@@ -455,6 +522,7 @@ export function reconcileShips(
     const category = getShipCategory(ship.shipType);
     const style = CATEGORY_STYLES[category];
     const radius = getShipCollisionRadius(ship, style);
+    const sanitizedSog = sanitizeShipSpeedKnots(ship.sog);
     const existing = shipMarkers.get(mmsi);
     const nextSizeScale = computeShipSizeScale(ship, style);
     const footprintRadius = getShipFootprintRadius(nextSizeScale);
@@ -471,14 +539,21 @@ export function reconcileShips(
 
       if (needsPlacementResolve) {
         const baseTarget = latLonToWorld(ship.lat, ship.lon);
-        const collisionPlacement = resolveShipTarget(baseTarget, mmsi, radius, footprintRadius, occupiedSlots);
-        placementTarget = collisionPlacement.target;
-        boundaryScale = collisionPlacement.boundaryScale;
-        if (!placementTarget) {
-          fallbackPlacements += 1;
-          const waterFallback = resolveWaterOnlyTarget(baseTarget, mmsi, footprintRadius);
+        // Moving vessels should follow telemetry directly; collision re-packing causes visible hopping.
+        if (sanitizedSog > 1.2) {
+          const waterFallback = resolveWaterOnlyTarget(baseTarget, mmsi, footprintRadius, markerData.boundaryScale);
           placementTarget = waterFallback.target;
           boundaryScale = waterFallback.boundaryScale;
+        } else {
+          const collisionPlacement = resolveShipTarget(baseTarget, mmsi, radius, footprintRadius, occupiedSlots);
+          placementTarget = collisionPlacement.target;
+          boundaryScale = collisionPlacement.boundaryScale;
+          if (!placementTarget) {
+            fallbackPlacements += 1;
+            const waterFallback = resolveWaterOnlyTarget(baseTarget, mmsi, footprintRadius);
+            placementTarget = waterFallback.target;
+            boundaryScale = waterFallback.boundaryScale;
+          }
         }
       } else {
         placementTarget = markerData.target;
@@ -490,7 +565,15 @@ export function reconcileShips(
       markerData.boundaryScale = boundaryScale;
       markerData.hiddenByBoundary = !placementTarget;
       markerData.nextBoundaryCheckAt = Date.now() + SHIP_BOUNDARY_RECHECK_INTERVAL_MS;
-      if (placementTarget) markerData.target.copy(placementTarget);
+      if (placementTarget) {
+        updateShipMotionFromTelemetry(
+          markerData,
+          placementTarget,
+          ship.lastPositionUpdate,
+          sanitizedSog,
+          sanitizeCourseDeg(ship.cog, ship.heading),
+        );
+      }
 
       const needsGeometryRefresh =
         markerData.category !== category || Math.abs(markerData.sizeScale - nextSizeScale) > 0.04;
@@ -627,6 +710,14 @@ export function reconcileShips(
       mmsi,
       ship,
       target: spawnTarget.clone(),
+      motion: {
+        anchorPosition: spawnTarget.clone(),
+        anchorTimeMs: ship.lastPositionUpdate,
+        correction: new THREE.Vector3(),
+        speedKnots: sanitizeShipSpeedKnots(ship.sog),
+        courseDeg: sanitizeCourseDeg(ship.cog, ship.heading),
+        lastAnimateTimeMs: Date.now(),
+      },
       wake,
       baseColor: hullColor.clone(),
       category,
@@ -683,14 +774,9 @@ export function reconcileShips(
 }
 
 /* ── Per-Frame Ship Animation ────────────────────────────────────────── */
-
-// AIS update interval for interpolation timing (typical: 2-10 seconds)
-const AIS_UPDATE_INTERVAL_MS = 5000;
 // Knots → world units per millisecond conversion
 // 1 knot = 1.852 km/h = 0.0005144 m/s; scaled to world units
 const KNOTS_TO_WORLD_PER_MS = (0.0005144 * WORLD_UNITS_PER_METER);
-
-const _deadReckonTarget = new THREE.Vector3();
 
 export function animateShips(
   shipMarkers: Map<number, ShipMesh>,
@@ -709,43 +795,33 @@ export function animateShips(
     marker.visible = true;
 
     const ship = markerData.ship;
+    const sanitizedSog = sanitizeShipSpeedKnots(ship.sog);
     const isAnchored = ship.navStatus === 1;
     const isMoored = ship.navStatus === 5;
-    const isMoving = ship.sog > 2.4;
+    const isMoving = sanitizedSog > 2.4;
     const currentEffectiveScale = marker.scale.x || 1;
     const currentZoomScale = currentEffectiveScale / Math.max(markerData.boundaryScale, 0.1);
     const blendedVisualScale = THREE.MathUtils.lerp(currentZoomScale, zoomScale, 0.35);
     marker.scale.setScalar(blendedVisualScale * markerData.boundaryScale);
     let followStrength = isMoored ? 0.08 : 0.12;
 
-    // ── Time-based interpolation + dead reckoning ──
+    const motion = markerData.motion;
+    const elapsedSinceAnchor = Math.min(
+      Math.max(0, now - motion.anchorTimeMs),
+      SHIP_PREDICTION_MAX_MS,
+    );
+    const predicted = projectPositionFromCourseAndSpeed(
+      motion.anchorPosition,
+      motion.courseDeg,
+      motion.speedKnots,
+      elapsedSinceAnchor,
+    );
+    const frameDt = Math.max(0, now - motion.lastAnimateTimeMs);
+    applyExponentialCorrectionDecay(motion.correction, frameDt);
+    motion.lastAnimateTimeMs = now;
+    markerData.target.copy(predicted.add(motion.correction));
     if (isMoving && !isMoored) {
-      const elapsed = now - ship.lastPositionUpdate;
-      const interpT = Math.min(elapsed / AIS_UPDATE_INTERVAL_MS, 1);
       followStrength = 0.2;
-
-      // Interpolate between previous and current known positions
-      const interpLat = ship.prevLat + (ship.lat - ship.prevLat) * interpT;
-      const interpLon = ship.prevLon + (ship.lon - ship.prevLon) * interpT;
-
-      // Dead reckoning: if interpolation is complete, project forward using SOG/COG
-      if (interpT >= 1) {
-        const overshootMs = elapsed - AIS_UPDATE_INTERVAL_MS;
-        const headingRad = (ship.cog * Math.PI) / 180;
-        const distanceUnits = ship.sog * KNOTS_TO_WORLD_PER_MS * Math.min(overshootMs, 10000);
-        const drTarget = latLonToWorld(ship.lat, ship.lon);
-        // COG is clockwise from north; in world space: x = sin(heading), z = cos(heading)
-        // But world coords are mirrored, so negate x
-        _deadReckonTarget.set(
-          drTarget.x - Math.sin(headingRad) * distanceUnits,
-          markerData.target.y,
-          drTarget.z + Math.cos(headingRad) * distanceUnits,
-        );
-        markerData.target.copy(_deadReckonTarget);
-      } else {
-        const interpTarget = latLonToWorld(interpLat, interpLon);
-        markerData.target.copy(interpTarget);
-      }
     }
 
     const boundaryRecheckInterval = isMoving
@@ -785,14 +861,18 @@ export function animateShips(
     marker.position.y = SHIP_BASE_Y + bob;
 
     // Heading
-    marker.rotation.y = (-ship.heading * Math.PI) / 180;
+    marker.rotation.y = THREE.MathUtils.lerp(
+      marker.rotation.y,
+      (-ship.heading * Math.PI) / 180,
+      0.18,
+    );
 
     // Wake
     const wake = markerData.wake;
     wake.visible = isMoving && !isMoored;
     const wakeScaleBase = markerData.sizeScale * markerData.boundaryScale;
-    wake.scale.x = markerData.wakeWidth * wakeScaleBase * (0.58 + Math.min(ship.sog / 13, 1.05));
-    wake.scale.z = markerData.wakeLength * wakeScaleBase * (0.72 + Math.min(ship.sog / 11, 1.24));
-    wake.material.opacity = WAKE_BASE_OPACITY + Math.min(ship.sog / 55, 0.14);
+    wake.scale.x = markerData.wakeWidth * wakeScaleBase * (0.58 + Math.min(sanitizedSog / 13, 1.05));
+    wake.scale.z = markerData.wakeLength * wakeScaleBase * (0.72 + Math.min(sanitizedSog / 11, 1.24));
+    wake.material.opacity = WAKE_BASE_OPACITY + Math.min(sanitizedSog / 55, 0.14);
   }
 }

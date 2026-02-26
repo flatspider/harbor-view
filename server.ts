@@ -116,6 +116,93 @@ const app = express();
 const httpServer = http.createServer(app);
 
 const ships = new Map<number, ShipData>();
+
+/* ── Aircraft (adsb.lol) ──────────────────────────────────────────────── */
+
+interface ServerAircraftData {
+  hex: string;        // ICAO hex identifier
+  flight: string;     // Callsign / flight number
+  lat: number;
+  lon: number;
+  alt_baro: number;   // Barometric altitude in feet (-1 = ground)
+  alt_geom: number;   // Geometric altitude in feet
+  gs: number;         // Ground speed in knots
+  track: number;      // Track angle in degrees (0 = north)
+  category: string;   // Emitter category (e.g., "A1", "A3")
+  squawk: string;
+  lastSeen: number;   // Timestamp ms of last update
+}
+
+const aircraft = new Map<string, ServerAircraftData>();
+const AIRCRAFT_POLL_INTERVAL_MS = 10_000;
+const AIRCRAFT_STALE_MS = 60_000;
+
+async function pollAircraftData(): Promise<void> {
+  try {
+    const raw = await fetchJson(
+      `https://api.adsb.lol/v2/lat/${NY_HARBOR_POINT.lat}/lon/${NY_HARBOR_POINT.lon}/dist/${ADSB_RADIUS_NM}`,
+    );
+    const record = ensureRecord(raw);
+    const ac = asArray(record?.ac);
+    const now = Date.now();
+
+    const seenHexes = new Set<string>();
+
+    for (const entry of ac) {
+      const obj = ensureRecord(entry);
+      if (!obj) continue;
+
+      const hex = asString(obj.hex);
+      if (!hex) continue;
+
+      const lat = asNumber(obj.lat);
+      const lon = asNumber(obj.lon);
+      if (lat == null || lon == null) continue;
+
+      // Filter: must be within our scene bounds
+      if (
+        lat < NY_HARBOR_BOUNDS.south ||
+        lat > NY_HARBOR_BOUNDS.north ||
+        lon < NY_HARBOR_BOUNDS.west ||
+        lon > NY_HARBOR_BOUNDS.east
+      ) {
+        continue;
+      }
+
+      // Filter out ground aircraft
+      const altBaroRaw = obj.alt_baro;
+      if (altBaroRaw === "ground") continue;
+      const altBaro = asNumber(altBaroRaw);
+      if (altBaro == null || altBaro <= 0) continue;
+
+      seenHexes.add(hex);
+
+      aircraft.set(hex, {
+        hex,
+        flight: (asString(obj.flight) ?? "").trim(),
+        lat,
+        lon,
+        alt_baro: altBaro,
+        alt_geom: asNumber(obj.alt_geom) ?? altBaro,
+        gs: asNumber(obj.gs) ?? 0,
+        track: asNumber(obj.track) ?? 0,
+        category: asString(obj.category) ?? "",
+        squawk: asString(obj.squawk) ?? "",
+        lastSeen: now,
+      });
+    }
+
+    // Remove aircraft not seen in this poll that are also stale
+    for (const [hex, ac] of aircraft) {
+      if (!seenHexes.has(hex) && now - ac.lastSeen > AIRCRAFT_STALE_MS) {
+        aircraft.delete(hex);
+      }
+    }
+  } catch (error) {
+    console.error("[aircraft] Poll failed:", error instanceof Error ? error.message : error);
+  }
+}
+
 let upstream: WebSocket | null = null;
 let reconnectTimeout: ReturnType<typeof setTimeout> | undefined;
 let upstreamStatus: RelayStatus = "disconnected";
@@ -825,6 +912,12 @@ app.get("/api/ships", (_req, res) => {
   });
 });
 
+app.get("/api/aircraft", (_req, res) => {
+  res.json({
+    aircraft: Array.from(aircraft.values()),
+  });
+});
+
 app.get("/api/data-sources", async (_req, res) => {
   await refreshIntegrationSnapshots();
 
@@ -865,6 +958,8 @@ httpServer.listen(PORT, () => {
 ViteExpress.bind(app, httpServer, () => {
   connectUpstream();
   void refreshIntegrationSnapshots();
+  void pollAircraftData();
+  setInterval(() => void pollAircraftData(), AIRCRAFT_POLL_INTERVAL_MS);
 })
   .catch((error: unknown) => {
     console.error("Failed to bind ViteExpress", error);

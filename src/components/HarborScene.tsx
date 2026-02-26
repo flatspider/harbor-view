@@ -7,6 +7,7 @@ import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import type { ShipData } from "../types/ais";
+import type { AircraftData } from "../types/aircraft";
 import type { HarborEnvironment } from "../types/environment";
 import { ShipInfoCard } from "./ShipInfoCard";
 import { FerryRouteInfoCard } from "./FerryRouteInfoCard";
@@ -29,6 +30,7 @@ import { landPolygonRings, loadLandPolygons } from "../scene/land";
 import { loadSkylineSmoke } from "../scene/skyline";
 import { createWaterTiles, animateWaterTiles, disposeWaterTiles } from "../scene/ocean";
 import { reconcileShips, animateShips } from "../scene/ships";
+import { reconcileAircraft, animateAircraft, type AircraftMarker } from "../scene/airplanes";
 import { createWindParticles, animateAtmosphere, disposeWindParticles } from "../scene/atmosphere";
 import { HARBOR_LABELS, projectLabels } from "../scene/labels";
 import {
@@ -52,6 +54,7 @@ import { loadPassengerFerryPrototype } from "../scene/passengerFerryModel";
 
 interface HarborSceneProps {
   ships: Map<number, ShipData>;
+  aircraft: Map<string, AircraftData>;
   environment: HarborEnvironment;
 }
 
@@ -76,7 +79,7 @@ const SKY_SLIDERS: SkySliderConfig[] = [
   { key: "exposure", label: "Exposure", min: 0, max: 2, step: 0.01, digits: 2 },
 ];
 
-export function HarborScene({ ships, environment }: HarborSceneProps) {
+export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) {
   const sceneRef = useRef<HTMLDivElement>(null);
   const sceneInstanceRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -95,6 +98,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
   const animationRef = useRef<number | null>(null);
   const frameLoopTokenRef = useRef(0);
   const shipMarkersRef = useRef<Map<number, ShipMesh>>(new Map());
+  const aircraftMarkersRef = useRef<Map<string, AircraftMarker>>(new Map());
   const ferryRouteTargetsRef = useRef<THREE.Line[]>([]);
   const tileRef = useRef<WaterTile[]>([]);
   const windParticlesRef = useRef<THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> | null>(null);
@@ -534,6 +538,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       );
       const shipZoomScale = THREE.MathUtils.lerp(0.9, 5.6, Math.pow(zoomProgress, 0.65));
       animateShips(shipMarkers, t, shipZoomScale);
+      animateAircraft(aircraftMarkersRef.current, t, shipZoomScale);
       controls.update();
 
       if (sceneRef.current && cameraRef.current) {
@@ -599,6 +604,16 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       cameraRef.current = null;
       sceneInstanceRef.current = null;
       shipMarkers.clear();
+      for (const marker of aircraftMarkersRef.current.values()) {
+        scene.remove(marker);
+        marker.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.geometry.dispose();
+            if (child.material instanceof THREE.Material) child.material.dispose();
+          }
+        });
+      }
+      aircraftMarkersRef.current.clear();
       raycastTargets.length = 0;
       ferryRouteTargets.length = 0;
       labelSizes.clear();
@@ -628,6 +643,14 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       passengerFerryPrototypeRef.current ?? undefined,
     );
   }, [ships, shipVisualAssetsRevision]);
+
+  /* ── Aircraft Reconciliation ─────────────────────────────────────────── */
+
+  useEffect(() => {
+    const scene = sceneInstanceRef.current;
+    if (!scene) return;
+    reconcileAircraft(scene, aircraft, aircraftMarkersRef.current);
+  }, [aircraft]);
 
   /* ── Render ────────────────────────────────────────────────────────── */
 

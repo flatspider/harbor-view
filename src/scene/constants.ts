@@ -123,6 +123,14 @@ export interface ShipMarkerData {
   mmsi: number;
   ship: import("../types/ais").ShipData;
   target: THREE.Vector3;
+  motion: {
+    anchorPosition: THREE.Vector3;
+    anchorTimeMs: number;
+    correction: THREE.Vector3;
+    speedKnots: number;
+    courseDeg: number;
+    lastAnimateTimeMs: number;
+  };
   wake: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
   baseColor: THREE.Color;
   category: ShipCategory;

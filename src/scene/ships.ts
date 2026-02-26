@@ -263,6 +263,16 @@ const SHIP_CORRECTION_HALF_LIFE_MS = 2_500;
 const SHIP_MAX_SPEED_KNOTS = 55;
 const AIS_SOG_UNAVAILABLE_THRESHOLD = 102.2;
 const SHIP_POSITION_NOISE_RADIUS = 0.55;
+const SHIP_MOTION_DEBUG =
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).has("shipMotionDebug");
+const SHIP_MOTION_LOG_INTERVAL_MS = 3_000;
+const shipMotionLastLogAt = new Map<number, number>();
+const SHIP_CORRECTION_INJECT_GAIN = 0.12;
+const SHIP_MAX_CORRECTION_UNITS = 22;
+const SHIP_TARGET_DAMPING_TAU_MS = 2200;
+const SHIP_POSITION_DAMPING_TAU_MOVING_MS = 1600;
+const SHIP_POSITION_DAMPING_TAU_IDLE_MS = 2600;
 
 interface ResolvedShipTarget {
   target: THREE.Vector3 | null;
@@ -285,16 +295,86 @@ function projectPositionFromCourseAndSpeed(
   );
 }
 
-function sanitizeShipSpeedKnots(rawSog: number): number {
-  if (!Number.isFinite(rawSog) || rawSog <= 0) return 0;
-  if (rawSog >= AIS_SOG_UNAVAILABLE_THRESHOLD) return 0;
-  return Math.min(rawSog, SHIP_MAX_SPEED_KNOTS);
+function angularDifferenceDeg(a: number, b: number): number {
+  const delta = Math.abs((((a - b) % 360) + 540) % 360 - 180);
+  return delta;
 }
 
-function sanitizeCourseDeg(rawCog: number, fallbackDeg = 0): number {
+function sanitizeShipSpeedKnots(rawSog: number, observedKnots?: number): number {
+  if (!Number.isFinite(rawSog) || rawSog <= 0) return 0;
+  if (rawSog >= AIS_SOG_UNAVAILABLE_THRESHOLD) return 0;
+
+  const candidateA = rawSog;
+  const candidateB = rawSog / 10;
+
+  let chosen = candidateA;
+  if (Number.isFinite(observedKnots) && observedKnots! > 0.3 && observedKnots! < 120) {
+    const errorA = Math.abs(candidateA - observedKnots!);
+    const errorB = Math.abs(candidateB - observedKnots!);
+    if (errorB + 0.2 < errorA) {
+      chosen = candidateB;
+    }
+  } else if (Number.isInteger(rawSog) && rawSog >= 35) {
+    // Heuristic for feeds that provide tenths-of-knot integers.
+    chosen = candidateB;
+  }
+
+  return Math.min(Math.max(0, chosen), SHIP_MAX_SPEED_KNOTS);
+}
+
+function sanitizeCourseDeg(rawCog: number, fallbackDeg = 0, observedCourseDeg?: number): number {
   if (!Number.isFinite(rawCog)) return fallbackDeg;
-  const normalized = ((rawCog % 360) + 360) % 360;
-  return normalized;
+  const candidateA = ((rawCog % 360) + 360) % 360;
+  const candidateB = (((rawCog / 10) % 360) + 360) % 360;
+
+  let chosen = rawCog > 360 ? candidateB : candidateA;
+  if (Number.isFinite(observedCourseDeg)) {
+    const diffChosen = angularDifferenceDeg(chosen, observedCourseDeg!);
+    if (diffChosen > 120) {
+      const diffA = angularDifferenceDeg(candidateA, observedCourseDeg!);
+      const diffB = angularDifferenceDeg(candidateB, observedCourseDeg!);
+      chosen = diffB + 4 < diffA ? candidateB : candidateA;
+      if (angularDifferenceDeg(chosen, observedCourseDeg!) > 130) {
+        chosen = observedCourseDeg!;
+      }
+    }
+  }
+
+  return chosen;
+}
+
+function clampVectorLength(vector: THREE.Vector3, maxLength: number): void {
+  const length = vector.length();
+  if (length <= maxLength || length === 0) return;
+  vector.multiplyScalar(maxLength / length);
+}
+
+function freezeShipMotion(marker: ShipMesh, markerData: ShipMarkerData): void {
+  markerData.motion.prevAnchorPosition.copy(marker.position);
+  markerData.motion.prevAnchorTimeMs = markerData.motion.anchorTimeMs;
+  markerData.motion.anchorPosition.copy(marker.position);
+  markerData.motion.anchorTimeMs = Date.now();
+  markerData.motion.speedKnots = 0;
+  markerData.motion.correction.set(0, 0, 0);
+  markerData.target.copy(marker.position);
+}
+
+function estimateObservedSpeedKnots(from: THREE.Vector3, to: THREE.Vector3, dtMs: number): number {
+  if (dtMs <= 0) return 0;
+  const dx = to.x - from.x;
+  const dz = to.z - from.z;
+  const distanceUnits = Math.hypot(dx, dz);
+  const distanceMeters = distanceUnits / WORLD_UNITS_PER_METER;
+  const mps = distanceMeters / (dtMs / 1000);
+  return mps / 0.5144;
+}
+
+function estimateObservedCourseDeg(from: THREE.Vector3, to: THREE.Vector3): number | null {
+  const dx = to.x - from.x;
+  const dz = to.z - from.z;
+  if (dx * dx + dz * dz < 0.0001) return null;
+  const radians = Math.atan2(-dx, dz);
+  return (((radians * 180) / Math.PI) + 360) % 360;
 }
 
 function applyExponentialCorrectionDecay(correction: THREE.Vector3, dtMs: number): void {
@@ -308,12 +388,18 @@ function updateShipMotionFromTelemetry(
   measuredTarget: THREE.Vector3,
   measuredAtMs: number,
   sog: number,
-  cog: number,
+  headingDeg: number,
+  observedKnots?: number,
+  observedCourseDeg?: number,
 ): void {
   const sampleTime = Math.max(0, measuredAtMs);
   const previousMotion = markerData.motion;
-  const sanitizedSpeed = sanitizeShipSpeedKnots(sog);
-  const sanitizedCourse = sanitizeCourseDeg(cog, previousMotion.courseDeg);
+  if (sampleTime > previousMotion.anchorTimeMs) {
+    previousMotion.prevAnchorPosition.copy(previousMotion.anchorPosition);
+    previousMotion.prevAnchorTimeMs = previousMotion.anchorTimeMs;
+  }
+  const sanitizedSpeed = sanitizeShipSpeedKnots(sog, observedKnots);
+  const sanitizedCourse = sanitizeCourseDeg(headingDeg, previousMotion.courseDeg, observedCourseDeg);
   const predictedAtSample = projectPositionFromCourseAndSpeed(
     previousMotion.anchorPosition,
     previousMotion.courseDeg,
@@ -323,12 +409,35 @@ function updateShipMotionFromTelemetry(
 
   const residual = measuredTarget.clone().sub(predictedAtSample);
   if (residual.lengthSq() > SHIP_POSITION_NOISE_RADIUS * SHIP_POSITION_NOISE_RADIUS) {
-    previousMotion.correction.add(residual);
+    previousMotion.correction.addScaledVector(residual, SHIP_CORRECTION_INJECT_GAIN);
+    clampVectorLength(previousMotion.correction, SHIP_MAX_CORRECTION_UNITS);
   }
   previousMotion.anchorPosition.copy(measuredTarget);
   previousMotion.anchorTimeMs = sampleTime;
   previousMotion.speedKnots = sanitizedSpeed;
   previousMotion.courseDeg = sanitizedCourse;
+
+  if (SHIP_MOTION_DEBUG && Number.isFinite(observedKnots) && Number.isFinite(observedCourseDeg)) {
+    const courseDelta = angularDifferenceDeg(sanitizedCourse, observedCourseDeg!);
+    const speedDelta = Math.abs(sanitizedSpeed - observedKnots!);
+    const now = Date.now();
+    const lastLogAt = shipMotionLastLogAt.get(markerData.mmsi) ?? 0;
+    if (now - lastLogAt >= SHIP_MOTION_LOG_INTERVAL_MS) {
+      const mismatch = courseDelta > 60 || speedDelta > 8;
+      shipMotionLastLogAt.set(markerData.mmsi, now);
+      console.info(mismatch ? "[ship-motion][mismatch]" : "[ship-motion]", {
+        mmsi: markerData.mmsi,
+        rawSog: sog,
+        chosenSog: Number(sanitizedSpeed.toFixed(2)),
+        observedSog: Number(observedKnots!.toFixed(2)),
+        rawHeading: headingDeg,
+        chosenCog: Number(sanitizedCourse.toFixed(1)),
+        observedCog: Number(observedCourseDeg!.toFixed(1)),
+        speedDelta: Number(speedDelta.toFixed(2)),
+        courseDelta: Number(courseDelta.toFixed(1)),
+      });
+    }
+  }
 }
 
 export function getShipFootprintRadius(sizeScale: number): number {
@@ -523,6 +632,7 @@ export function reconcileShips(
     const style = CATEGORY_STYLES[category];
     const radius = getShipCollisionRadius(ship, style);
     const sanitizedSog = sanitizeShipSpeedKnots(ship.sog);
+    const isMoored = ship.navStatus === 5;
     const existing = shipMarkers.get(mmsi);
     const nextSizeScale = computeShipSizeScale(ship, style);
     const footprintRadius = getShipFootprintRadius(nextSizeScale);
@@ -537,13 +647,15 @@ export function reconcileShips(
         Math.abs(ship.lat - previousShip.lat) > SHIP_POSITION_RECONCILE_EPSILON ||
         Math.abs(ship.lon - previousShip.lon) > SHIP_POSITION_RECONCILE_EPSILON;
 
-      if (needsPlacementResolve) {
+      if (isMoored || sanitizedSog <= 0) {
+        placementTarget = markerData.target;
+        boundaryScale = markerData.boundaryScale;
+      } else if (needsPlacementResolve) {
         const baseTarget = latLonToWorld(ship.lat, ship.lon);
         // Moving vessels should follow telemetry directly; collision re-packing causes visible hopping.
         if (sanitizedSog > 1.2) {
-          const waterFallback = resolveWaterOnlyTarget(baseTarget, mmsi, footprintRadius, markerData.boundaryScale);
-          placementTarget = waterFallback.target;
-          boundaryScale = waterFallback.boundaryScale;
+          placementTarget = baseTarget;
+          boundaryScale = markerData.boundaryScale;
         } else {
           const collisionPlacement = resolveShipTarget(baseTarget, mmsi, radius, footprintRadius, occupiedSlots);
           placementTarget = collisionPlacement.target;
@@ -566,13 +678,24 @@ export function reconcileShips(
       markerData.hiddenByBoundary = !placementTarget;
       markerData.nextBoundaryCheckAt = Date.now() + SHIP_BOUNDARY_RECHECK_INTERVAL_MS;
       if (placementTarget) {
-        updateShipMotionFromTelemetry(
-          markerData,
-          placementTarget,
-          ship.lastPositionUpdate,
-          sanitizedSog,
-          sanitizeCourseDeg(ship.cog, ship.heading),
-        );
+        if (isMoored || sanitizedSog <= 0) {
+          freezeShipMotion(existing, markerData);
+        } else {
+          const currentTelemetryWorld = latLonToWorld(ship.lat, ship.lon);
+          const prevTelemetryWorld = latLonToWorld(previousShip.lat, previousShip.lon);
+          const telemetryDtMs = Math.max(750, ship.lastPositionUpdate - previousShip.lastPositionUpdate);
+          const observedKnots = estimateObservedSpeedKnots(prevTelemetryWorld, currentTelemetryWorld, telemetryDtMs);
+          const observedCourseDeg = estimateObservedCourseDeg(prevTelemetryWorld, currentTelemetryWorld) ?? undefined;
+          updateShipMotionFromTelemetry(
+            markerData,
+            placementTarget,
+            ship.lastPositionUpdate,
+            ship.sog,
+            ship.heading,
+            observedKnots,
+            observedCourseDeg,
+          );
+        }
       }
 
       const needsGeometryRefresh =
@@ -711,11 +834,13 @@ export function reconcileShips(
       ship,
       target: spawnTarget.clone(),
       motion: {
+        prevAnchorPosition: spawnTarget.clone(),
+        prevAnchorTimeMs: ship.lastPositionUpdate,
         anchorPosition: spawnTarget.clone(),
         anchorTimeMs: ship.lastPositionUpdate,
         correction: new THREE.Vector3(),
         speedKnots: sanitizeShipSpeedKnots(ship.sog),
-        courseDeg: sanitizeCourseDeg(ship.cog, ship.heading),
+        courseDeg: sanitizeCourseDeg(ship.heading, ship.cog),
         lastAnimateTimeMs: Date.now(),
       },
       wake,
@@ -803,9 +928,8 @@ export function animateShips(
     const currentZoomScale = currentEffectiveScale / Math.max(markerData.boundaryScale, 0.1);
     const blendedVisualScale = THREE.MathUtils.lerp(currentZoomScale, zoomScale, 0.35);
     marker.scale.setScalar(blendedVisualScale * markerData.boundaryScale);
-    let followStrength = isMoored ? 0.08 : 0.12;
-
     const motion = markerData.motion;
+    const frameDt = Math.max(0, now - motion.lastAnimateTimeMs);
     const elapsedSinceAnchor = Math.min(
       Math.max(0, now - motion.anchorTimeMs),
       SHIP_PREDICTION_MAX_MS,
@@ -816,13 +940,11 @@ export function animateShips(
       motion.speedKnots,
       elapsedSinceAnchor,
     );
-    const frameDt = Math.max(0, now - motion.lastAnimateTimeMs);
     applyExponentialCorrectionDecay(motion.correction, frameDt);
     motion.lastAnimateTimeMs = now;
-    markerData.target.copy(predicted.add(motion.correction));
-    if (isMoving && !isMoored) {
-      followStrength = 0.2;
-    }
+    const desiredTarget = predicted.add(motion.correction);
+    const targetAlpha = 1 - Math.exp(-frameDt / SHIP_TARGET_DAMPING_TAU_MS);
+    markerData.target.lerp(desiredTarget, THREE.MathUtils.clamp(targetAlpha, 0, 1));
 
     const boundaryRecheckInterval = isMoving
       ? SHIP_BOUNDARY_RECHECK_MOVING_INTERVAL_MS
@@ -852,7 +974,9 @@ export function animateShips(
       }
     }
 
-    marker.position.lerp(markerData.target, followStrength);
+    const positionTau = isMoving && !isMoored ? SHIP_POSITION_DAMPING_TAU_MOVING_MS : SHIP_POSITION_DAMPING_TAU_IDLE_MS;
+    const positionAlpha = 1 - Math.exp(-frameDt / positionTau);
+    marker.position.lerp(markerData.target, THREE.MathUtils.clamp(positionAlpha, 0, 1));
 
     // Bobbing for anchored/moored vessels
     const bob = (isAnchored || isMoored)
@@ -864,7 +988,7 @@ export function animateShips(
     marker.rotation.y = THREE.MathUtils.lerp(
       marker.rotation.y,
       (-ship.heading * Math.PI) / 180,
-      0.18,
+      0.1,
     );
 
     // Wake

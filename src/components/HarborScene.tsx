@@ -18,6 +18,7 @@ import { GhibliColorShader } from "../scene/ghibliColorShader";
 import {
   WORLD_WIDTH,
   WORLD_DEPTH,
+  SHIP_BASE_Y,
   RENDER_LAND_POLYGONS,
   RENDER_SMOKE_SKYLINE,
   isNightTime,
@@ -79,6 +80,122 @@ const SKY_SLIDERS: SkySliderConfig[] = [
   { key: "exposure", label: "Exposure", min: 0, max: 2, step: 0.01, digits: 2 },
 ];
 
+function createCompassLabelSprite(text: string, fontPx = 26): THREE.Sprite {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 96;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    const fallback = new THREE.Sprite(new THREE.SpriteMaterial({ color: "#ffffff" }));
+    fallback.scale.set(16, 6, 1);
+    return fallback;
+  }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.font = `600 ${fontPx}px sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#d7e7f2";
+  ctx.strokeStyle = "#1b2f3f";
+  ctx.lineWidth = 8;
+  ctx.strokeText(text, canvas.width / 2, canvas.height / 2);
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+  });
+  const sprite = new THREE.Sprite(material);
+  sprite.renderOrder = 30;
+  return sprite;
+}
+
+function createCompassDebugGroup(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "debug-compass";
+  const radius = 72;
+
+  const ringPoints: THREE.Vector3[] = [];
+  const ringSegments = 120;
+  for (let i = 0; i <= ringSegments; i += 1) {
+    const a = (i / ringSegments) * Math.PI * 2;
+    ringPoints.push(new THREE.Vector3(-Math.sin(a) * radius, 0, Math.cos(a) * radius));
+  }
+  const ring = new THREE.LineLoop(
+    new THREE.BufferGeometry().setFromPoints(ringPoints),
+    new THREE.LineBasicMaterial({ color: "#6ba7c6", transparent: true, opacity: 0.85 }),
+  );
+  ring.renderOrder = 20;
+  group.add(ring);
+
+  const tickPositions: number[] = [];
+  for (let deg = 0; deg < 360; deg += 10) {
+    const rad = (deg * Math.PI) / 180;
+    const tickLen = deg % 90 === 0 ? 12 : deg % 30 === 0 ? 8 : 4;
+    const inner = radius - tickLen;
+    const outer = radius + (deg % 30 === 0 ? 2 : 0);
+    tickPositions.push(
+      -Math.sin(rad) * inner, 0, Math.cos(rad) * inner,
+      -Math.sin(rad) * outer, 0, Math.cos(rad) * outer,
+    );
+  }
+  const ticks = new THREE.LineSegments(
+    new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(tickPositions, 3)),
+    new THREE.LineBasicMaterial({ color: "#8ac0db", transparent: true, opacity: 0.9 }),
+  );
+  ticks.renderOrder = 20;
+  group.add(ticks);
+
+  const headingLabels = [
+    { deg: 0, text: "N (0)" },
+    { deg: 90, text: "E (90)" },
+    { deg: 180, text: "S (180)" },
+    { deg: 270, text: "W (270)" },
+    { deg: 30, text: "30" },
+    { deg: 60, text: "60" },
+    { deg: 120, text: "120" },
+    { deg: 150, text: "150" },
+    { deg: 210, text: "210" },
+    { deg: 240, text: "240" },
+    { deg: 300, text: "300" },
+    { deg: 330, text: "330" },
+  ];
+  for (const label of headingLabels) {
+    const sprite = createCompassLabelSprite(label.text, label.deg % 90 === 0 ? 30 : 24);
+    const rad = (label.deg * Math.PI) / 180;
+    const labelRadius = radius + (label.deg % 90 === 0 ? 22 : 16);
+    sprite.position.set(-Math.sin(rad) * labelRadius, 0.5, Math.cos(rad) * labelRadius);
+    sprite.scale.set(label.deg % 90 === 0 ? 28 : 16, label.deg % 90 === 0 ? 9 : 6, 1);
+    group.add(sprite);
+  }
+
+  return group;
+}
+
+function disposeObject3D(object: THREE.Object3D): void {
+  object.traverse((child) => {
+    if (child instanceof THREE.Sprite) {
+      if (child.material instanceof THREE.SpriteMaterial) {
+        child.material.map?.dispose();
+        child.material.dispose();
+      }
+      return;
+    }
+    if (child instanceof THREE.Line || child instanceof THREE.LineSegments || child instanceof THREE.Mesh) {
+      child.geometry.dispose();
+      if (Array.isArray(child.material)) {
+        for (const material of child.material) material.dispose();
+      } else if (child.material instanceof THREE.Material) {
+        child.material.dispose();
+      }
+    }
+  });
+}
+
 export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) {
   const sceneRef = useRef<HTMLDivElement>(null);
   const sceneInstanceRef = useRef<THREE.Scene | null>(null);
@@ -133,6 +250,9 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
     sceneWidth: number;
     sceneHeight: number;
   } | null>(null);
+  const showDebugGrid =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).has("grid");
 
   const handleShipClick = useCallback(
     (ship: ShipData, worldPos: THREE.Vector3) => {
@@ -196,6 +316,7 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
     const ferryRouteTargets = ferryRouteTargetsRef.current;
     const tiles = tileRef.current;
     const coastlineObjects = coastlineObjectsRef.current;
+    const debugObjects: THREE.Object3D[] = [];
     const raycastTargets = raycastTargetsRef.current;
     const labelSizes = labelSizesRef.current;
     const abortController = new AbortController();
@@ -207,6 +328,22 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
     scene.background = new THREE.Color("#c8c2d5");
     scene.fog = new THREE.FogExp2("#c8c2d5", 0.00018);
     sceneInstanceRef.current = scene;
+    if (showDebugGrid) {
+      const gridSize = Math.max(WORLD_WIDTH, WORLD_DEPTH) * 1.2;
+      const divisions = Math.max(24, Math.round(gridSize / 60));
+      const grid = new THREE.GridHelper(gridSize, divisions, "#31556c", "#27404f");
+      grid.position.y = SHIP_BASE_Y - 0.2;
+      scene.add(grid);
+      debugObjects.push(grid);
+      const axes = new THREE.AxesHelper(120);
+      axes.position.set(0, SHIP_BASE_Y + 0.1, 0);
+      scene.add(axes);
+      debugObjects.push(axes);
+      const compass = createCompassDebugGroup();
+      compass.position.set(WORLD_WIDTH * 0.38, SHIP_BASE_Y + 0.12, -WORLD_DEPTH * 0.38);
+      scene.add(compass);
+      debugObjects.push(compass);
+    }
 
     // Camera
     const camera = new THREE.PerspectiveCamera(40, mount.clientWidth / mount.clientHeight, 1, 5000);
@@ -624,6 +761,10 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
         if (object instanceof THREE.Line) object.geometry.dispose();
       }
       coastlineObjects.length = 0;
+      for (const object of debugObjects) {
+        scene.remove(object);
+        disposeObject3D(object);
+      }
       abortController.abort();
       landPolygonRings.length = 0;
     };

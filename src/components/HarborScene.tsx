@@ -11,6 +11,7 @@ import {
   WORLD_WIDTH,
   WORLD_DEPTH,
   RENDER_LAND_POLYGONS,
+  RENDER_SMOKE_SKYLINE,
   isNightTime,
   getShipMarkerData,
   getShipMarkerFromObject,
@@ -18,6 +19,7 @@ import {
   type WaterTile,
 } from "../scene/constants";
 import { landPolygonRings, loadLandPolygons } from "../scene/land";
+import { loadSkylineSmoke } from "../scene/skyline";
 import { createWaterTiles, animateWaterTiles, disposeWaterTiles } from "../scene/ocean";
 import { reconcileShips, animateShips } from "../scene/ships";
 import { createWindParticles, animateAtmosphere, disposeWindParticles } from "../scene/atmosphere";
@@ -244,6 +246,10 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     void (async () => {
       if (RENDER_LAND_POLYGONS) {
         await loadLandPolygons(scene, abortController.signal);
+      }
+      if (abortController.signal.aborted) return;
+      if (RENDER_SMOKE_SKYLINE) {
+        await loadSkylineSmoke(scene, abortController.signal);
       }
       if (abortController.signal.aborted) return;
       await loadFerryRoutes(scene, abortController.signal);

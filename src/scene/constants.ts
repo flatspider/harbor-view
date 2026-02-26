@@ -55,6 +55,7 @@ export const WORLD_WIDTH = Math.max(
 
 export const LAND_BASE_HEIGHT = 12;
 export const RENDER_LAND_POLYGONS = true;
+export const RENDER_SMOKE_SKYLINE = true;
 export const SHIP_BASE_Y = 10;
 export const WAKE_WORLD_Y = 0.22;
 export const WAKE_BASE_OPACITY = 0.09;

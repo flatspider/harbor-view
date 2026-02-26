@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { convertToToonMaterial } from "./convertToToon";
 
 interface ContainerShipMetrics {
   length: number;
@@ -23,27 +24,37 @@ const _hsl = { h: 0, s: 0, l: 0 };
 
 let containerShipLoadPromise: Promise<THREE.Object3D> | null = null;
 
-function applyContainerShipLook(material: THREE.Material): void {
-  const flagged = (material.userData as { __containerShipStyledMaterial?: boolean })[CONTAINER_SHIP_STYLED_MATERIAL_KEY];
-  if (flagged) return;
+function applyToonContainerShipMaterial(mesh: THREE.Mesh): void {
+  const swap = (source: THREE.Material): THREE.MeshToonMaterial => {
+    if ((source.userData as Record<string, unknown>)[CONTAINER_SHIP_STYLED_MATERIAL_KEY]) {
+      return source as unknown as THREE.MeshToonMaterial;
+    }
 
-  if (material instanceof THREE.MeshStandardMaterial || material instanceof THREE.MeshPhysicalMaterial) {
-    material.color.getHSL(_hsl);
-    material.color.setHSL(
+    const toon = convertToToonMaterial(source);
+
+    // Brighten / saturate the toon color
+    toon.color.getHSL(_hsl);
+    toon.color.setHSL(
       _hsl.h,
       Math.min(1, _hsl.s * 1.2 + 0.05),
       Math.min(0.72, _hsl.l * 1.22 + 0.06),
     );
-    material.metalness = Math.min(material.metalness, 0.08);
-    material.roughness = Math.max(material.roughness, 0.58);
-    material.emissive.copy(material.color).multiplyScalar(0.12);
-    material.emissiveIntensity = 0.36;
-    material.toneMapped = false;
-    if (material.map) material.map.colorSpace = THREE.SRGBColorSpace;
-    material.needsUpdate = true;
-  }
+    toon.emissive.copy(toon.color);
+    toon.emissiveIntensity = 0.15;
+    toon.needsUpdate = true;
 
-  material.userData[CONTAINER_SHIP_STYLED_MATERIAL_KEY] = true;
+    toon.userData[CONTAINER_SHIP_STYLED_MATERIAL_KEY] = true;
+
+    if (source !== toon) source.dispose();
+
+    return toon;
+  };
+
+  if (Array.isArray(mesh.material)) {
+    mesh.material = mesh.material.map(swap);
+  } else {
+    mesh.material = swap(mesh.material);
+  }
 }
 
 function normalizePrototype(prototype: THREE.Object3D): ContainerShipMetrics {
@@ -74,11 +85,7 @@ function normalizePrototype(prototype: THREE.Object3D): ContainerShipMetrics {
     child.receiveShadow = false;
     child.renderOrder = 6;
     child.userData[CONTAINER_SHIP_SHARED_ASSET_KEY] = true;
-    if (Array.isArray(child.material)) {
-      for (const material of child.material) applyContainerShipLook(material);
-    } else {
-      applyContainerShipLook(child.material);
-    }
+    applyToonContainerShipMaterial(child);
   });
 
   return metrics;

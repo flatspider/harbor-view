@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { convertToToonMaterial } from "./convertToToon";
 
 interface PassengerFerryMetrics {
   length: number;
@@ -21,34 +22,41 @@ const PASSENGER_FERRY_STYLED_MATERIAL_KEY = "__passengerFerryStyledMaterial";
 
 const _hsl = { h: 0, s: 0, l: 0 };
 
-function applyVibrantBoatLook(material: THREE.Material): void {
-  const flagged = (material.userData as { __passengerFerryStyledMaterial?: boolean })[PASSENGER_FERRY_STYLED_MATERIAL_KEY];
-  if (flagged) return;
+function applyToonFerryMaterial(mesh: THREE.Mesh): void {
+  const swap = (source: THREE.Material): THREE.MeshToonMaterial => {
+    if ((source.userData as Record<string, unknown>)[PASSENGER_FERRY_STYLED_MATERIAL_KEY]) {
+      return source as unknown as THREE.MeshToonMaterial;
+    }
 
-  if (material instanceof THREE.MeshStandardMaterial || material instanceof THREE.MeshPhysicalMaterial) {
-    material.color.getHSL(_hsl);
+    const toon = convertToToonMaterial(source);
+
+    // Orange-lane hue correction on the toon color
+    toon.color.getHSL(_hsl);
     let h = _hsl.h;
     let s = _hsl.s;
     let l = _hsl.l;
-
-    // Keep the ferry in an orange lane (avoid blood-red drift after grading).
     if ((h < 0.04 || h > 0.96) && s > 0.25) h = 0.085;
     else if (h >= 0.04 && h <= 0.2) h = THREE.MathUtils.lerp(h, 0.1, 0.65);
-
     s = Math.min(1, s * 1.18 + 0.06);
     l = Math.min(0.68, l * 1.12 + 0.05);
-    material.color.setHSL(h, s, l);
+    toon.color.setHSL(h, s, l);
+    toon.emissive.copy(toon.color);
+    toon.emissiveIntensity = 0.15;
+    toon.needsUpdate = true;
 
-    material.metalness = Math.min(material.metalness, 0.05);
-    material.roughness = Math.max(material.roughness, 0.62);
-    material.emissive.copy(material.color).multiplyScalar(0.08);
-    material.emissiveIntensity = 0.28;
-    material.toneMapped = true;
-    if (material.map) material.map.colorSpace = THREE.SRGBColorSpace;
-    material.needsUpdate = true;
+    toon.userData[PASSENGER_FERRY_STYLED_MATERIAL_KEY] = true;
+
+    // Dispose old PBR material (textures are shared via convertToToon cache)
+    if (source !== toon) source.dispose();
+
+    return toon;
+  };
+
+  if (Array.isArray(mesh.material)) {
+    mesh.material = mesh.material.map(swap);
+  } else {
+    mesh.material = swap(mesh.material);
   }
-
-  material.userData[PASSENGER_FERRY_STYLED_MATERIAL_KEY] = true;
 }
 
 let passengerFerryLoadPromise: Promise<THREE.Object3D> | null = null;
@@ -82,11 +90,7 @@ function normalizePrototype(prototype: THREE.Object3D): PassengerFerryMetrics {
     child.renderOrder = 6;
     child.userData[PASSENGER_FERRY_SHARED_ASSET_KEY] = true;
 
-    if (Array.isArray(child.material)) {
-      for (const material of child.material) applyVibrantBoatLook(material);
-    } else {
-      applyVibrantBoatLook(child.material);
-    }
+    applyToonFerryMaterial(child);
   });
 
   return metrics;

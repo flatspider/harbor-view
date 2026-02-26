@@ -205,6 +205,8 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const composerRef = useRef<EffectComposer | null>(null);
   const edgePassRef = useRef<ShaderPass | null>(null);
+  const colorPassRef = useRef<ShaderPass | null>(null);
+  const bloomPassRef = useRef<UnrealBloomPass | null>(null);
   const controlsRef = useRef<MapControls | null>(null);
   const raycasterRef = useRef(new THREE.Raycaster());
   const pointerRef = useRef(new THREE.Vector2());
@@ -241,6 +243,28 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
   const [manualSkySettings, setManualSkySettings] = useState<SkySettings>(() => getDefaultSkySettings());
   const skyAutoModeRef = useRef(skyAutoMode);
   const manualSkySettingsRef = useRef(manualSkySettings);
+  const [lightingPanelOpen, setLightingPanelOpen] = useState(false);
+  const [lightingOverride, setLightingOverride] = useState(false);
+  const lightingOverrideRef = useRef(false);
+  const lightingValuesRef = useRef({
+    hemiIntensity: 1.1,
+    sunIntensity: 0.7,
+    exposure: 1.0,
+    saturationBoost: 1.35,
+    warmthShift: 0.035,
+    edgeStrength: 0.9,
+    edgeThreshold: 0.14,
+    bloomStrength: 0.08,
+    bloomRadius: 0.4,
+    bloomThreshold: 0.92,
+    hemiSkyColor: "#ddd8e8",
+    hemiGroundColor: "#5a5468",
+    sunColor: "#ffe0b2",
+    toneMapping: THREE.LinearToneMapping as number,
+    shadowsEnabled: false,
+  });
+  const [lightingValues, setLightingValues] = useState(() => ({ ...lightingValuesRef.current }));
+
   const [selectedShip, setSelectedShip] = useState<{
     ship: ShipData;
     x: number;
@@ -304,6 +328,22 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
     manualSkySettingsRef.current = manualSkySettings;
   }, [manualSkySettings]);
 
+  useEffect(() => {
+    lightingOverrideRef.current = lightingOverride;
+  }, [lightingOverride]);
+
+  useEffect(() => {
+    lightingValuesRef.current = lightingValues;
+  }, [lightingValues]);
+
+  const handleLightingChange = useCallback((key: string, value: number | string | boolean) => {
+    setLightingValues((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const handlePrintLighting = useCallback(() => {
+    console.log("[Harbor Watch] Lighting Debug Values:", JSON.stringify(lightingValuesRef.current, null, 2));
+  }, []);
+
   const handleSkySettingChange = useCallback((key: SkySettingKey, value: number) => {
     setManualSkySettings((prev) => ({ ...prev, [key]: value }));
   }, []);
@@ -360,10 +400,9 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.82;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.LinearToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    renderer.shadowMap.enabled = false;
     renderer.autoClear = true;
     mount.appendChild(renderer.domElement);
     rendererRef.current = renderer;
@@ -385,6 +424,7 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
 
     const colorPass = new ShaderPass(GhibliColorShader);
     composer.addPass(colorPass);
+    colorPassRef.current = colorPass;
 
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(mount.clientWidth, mount.clientHeight),
@@ -393,6 +433,7 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
       0.92,
     );
     composer.addPass(bloomPass);
+    bloomPassRef.current = bloomPass;
 
     composer.addPass(new OutputPass());
     composerRef.current = composer;
@@ -414,16 +455,14 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
     controlsRef.current = controls;
 
     // Lighting — warm sun from southwest, purple-tinted ambient
-    const hemiLight = new THREE.HemisphereLight("#ddd8e8", "#3a3548", 0.85);
+    const hemiLight = new THREE.HemisphereLight("#ddd8e8", "#5a5468", 1.1);
     hemiLight.position.set(0, 600, 0);
     scene.add(hemiLight);
     hemiLightRef.current = hemiLight;
 
-    const sunLight = new THREE.DirectionalLight("#ffe0b2", 1.2);
+    const sunLight = new THREE.DirectionalLight("#ffe0b2", 0.7);
     sunLight.position.set(-400, 300, -350); // southwest
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.width = 1024;
-    sunLight.shadow.mapSize.height = 1024;
+    sunLight.castShadow = false;
     scene.add(sunLight);
     sunLightRef.current = sunLight;
 
@@ -699,7 +738,36 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
           env,
           skyAutoModeRef.current ? undefined : manualSkySettingsRef.current,
         );
-        rendererRef.current.toneMappingExposure = appliedSky.exposure;
+        if (lightingOverrideRef.current) {
+          rendererRef.current.toneMappingExposure = lightingValuesRef.current.exposure;
+        } else {
+          rendererRef.current.toneMappingExposure = appliedSky.exposure;
+        }
+      }
+
+      // Apply lighting debug overrides after atmosphere has run
+      if (lightingOverrideRef.current) {
+        const lv = lightingValuesRef.current;
+        hemiLightRef.current!.intensity = lv.hemiIntensity;
+        hemiLightRef.current!.color.set(lv.hemiSkyColor);
+        hemiLightRef.current!.groundColor.set(lv.hemiGroundColor);
+        sunLightRef.current!.intensity = lv.sunIntensity;
+        sunLightRef.current!.color.set(lv.sunColor);
+        rendererRef.current.toneMapping = lv.toneMapping;
+        rendererRef.current.shadowMap.enabled = lv.shadowsEnabled;
+        if (colorPassRef.current) {
+          colorPassRef.current.uniforms.saturationBoost.value = lv.saturationBoost;
+          colorPassRef.current.uniforms.warmthShift.value = lv.warmthShift;
+        }
+        if (edgePassRef.current) {
+          edgePassRef.current.uniforms.edgeStrength.value = lv.edgeStrength;
+          edgePassRef.current.uniforms.edgeThreshold.value = lv.edgeThreshold;
+        }
+        if (bloomPassRef.current) {
+          bloomPassRef.current.strength = lv.bloomStrength;
+          bloomPassRef.current.radius = lv.bloomRadius;
+          bloomPassRef.current.threshold = lv.bloomThreshold;
+        }
       }
       if (cachedNight !== appliedFerryNight) {
         setFerryRouteNight(cachedNight);
@@ -772,6 +840,8 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
         composerRef.current = null;
       }
       edgePassRef.current = null;
+      colorPassRef.current = null;
+      bloomPassRef.current = null;
       renderer.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
       rendererRef.current = null;
@@ -896,6 +966,101 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
             {skyAutoMode ? (
               <p className="sky-controls-note">Auto mode uses live weather and time-of-day values. Disable to tune manually.</p>
             ) : null}
+          </div>
+        )}
+      </div>
+      <div
+        className="lighting-controls"
+        onPointerDown={(event) => event.stopPropagation()}
+        onPointerMove={(event) => event.stopPropagation()}
+        onPointerUp={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button type="button" className="sky-controls-toggle" onClick={() => setLightingPanelOpen((open) => !open)}>
+          {lightingPanelOpen ? "Hide Lighting" : "Lighting Debug"}
+        </button>
+        {lightingPanelOpen && (
+          <div className="lighting-controls-panel">
+            <div className="sky-controls-row">
+              <label className="sky-controls-check">
+                <input type="checkbox" checked={lightingOverride} onChange={(e) => setLightingOverride(e.target.checked)} />
+                Override
+              </label>
+              <button type="button" className="sky-controls-reset" onClick={handlePrintLighting}>
+                Print to Console
+              </button>
+            </div>
+
+            {/* Sliders */}
+            {([
+              { key: "hemiIntensity", label: "Hemi Int", min: 0, max: 3, step: 0.01, digits: 2 },
+              { key: "sunIntensity", label: "Sun Int", min: 0, max: 3, step: 0.01, digits: 2 },
+              { key: "exposure", label: "Exposure", min: 0, max: 3, step: 0.01, digits: 2 },
+              { key: "saturationBoost", label: "Saturation", min: 0, max: 3, step: 0.01, digits: 2 },
+              { key: "warmthShift", label: "Warmth", min: -0.1, max: 0.2, step: 0.001, digits: 3 },
+              { key: "edgeStrength", label: "Edge Str", min: 0, max: 3, step: 0.01, digits: 2 },
+              { key: "edgeThreshold", label: "Edge Thr", min: 0, max: 0.5, step: 0.005, digits: 3 },
+              { key: "bloomStrength", label: "Bloom Str", min: 0, max: 2, step: 0.01, digits: 2 },
+              { key: "bloomRadius", label: "Bloom Rad", min: 0, max: 2, step: 0.01, digits: 2 },
+              { key: "bloomThreshold", label: "Bloom Thr", min: 0, max: 2, step: 0.01, digits: 2 },
+            ] as const).map((s) => (
+              <label key={s.key} className="sky-control-row">
+                <span>{s.label}</span>
+                <input
+                  type="range"
+                  min={s.min}
+                  max={s.max}
+                  step={s.step}
+                  value={lightingValues[s.key]}
+                  disabled={!lightingOverride}
+                  onChange={(e) => handleLightingChange(s.key, Number(e.target.value))}
+                />
+                <output>{(lightingValues[s.key] as number).toFixed(s.digits)}</output>
+              </label>
+            ))}
+
+            {/* Color pickers */}
+            {([
+              { key: "hemiSkyColor", label: "Hemi Sky" },
+              { key: "hemiGroundColor", label: "Hemi Gnd" },
+              { key: "sunColor", label: "Sun Color" },
+            ] as const).map((c) => (
+              <label key={c.key} className="lighting-color-row">
+                <span>{c.label}</span>
+                <input
+                  type="color"
+                  value={lightingValues[c.key]}
+                  disabled={!lightingOverride}
+                  onChange={(e) => handleLightingChange(c.key, e.target.value)}
+                />
+              </label>
+            ))}
+
+            {/* Tone mapping dropdown */}
+            <label className="lighting-select-row">
+              <span>Tone Map</span>
+              <select
+                value={lightingValues.toneMapping}
+                disabled={!lightingOverride}
+                onChange={(e) => handleLightingChange("toneMapping", Number(e.target.value))}
+              >
+                <option value={THREE.NoToneMapping}>None</option>
+                <option value={THREE.LinearToneMapping}>Linear</option>
+                <option value={THREE.ReinhardToneMapping}>Reinhard</option>
+                <option value={THREE.ACESFilmicToneMapping}>ACES Filmic</option>
+              </select>
+            </label>
+
+            {/* Shadows checkbox */}
+            <label className="sky-controls-check" style={{ marginTop: 6 }}>
+              <input
+                type="checkbox"
+                checked={lightingValues.shadowsEnabled}
+                disabled={!lightingOverride}
+                onChange={(e) => handleLightingChange("shadowsEnabled", e.target.checked)}
+              />
+              Shadows
+            </label>
           </div>
         )}
       </div>

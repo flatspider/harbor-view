@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import type { AircraftSizeClass } from "../types/aircraft";
+import { convertToToonMaterial } from "./convertToToon";
 
 interface AirplaneMetrics {
   length: number;
@@ -49,6 +50,18 @@ function normalizePrototype(prototype: THREE.Object3D): AirplaneMetrics {
     child.receiveShadow = false;
     child.renderOrder = 6;
     child.userData[AIRPLANE_SHARED_ASSET_KEY] = true;
+
+    // Convert PBR materials to toon
+    const swapMat = (source: THREE.Material): THREE.MeshToonMaterial => {
+      const toon = convertToToonMaterial(source);
+      if (source !== toon) source.dispose();
+      return toon;
+    };
+    if (Array.isArray(child.material)) {
+      child.material = child.material.map(swapMat);
+    } else {
+      child.material = swapMat(child.material);
+    }
   });
 
   return metrics;

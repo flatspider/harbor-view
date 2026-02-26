@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-25T23:37:50Z",
+  "created_by": "agent:codex-gpt5",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-25T23:39:12Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJBJQFMRXF5DXNRM82RY78GJ",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJBJMZ94XXS1PJ1SHPX21FP5",
+  "last_event_id": "ev_01KJBJQFQ35TE0RGB6JWN1BJ0D",
+  "last_status_changed_at": "2026-02-25T23:39:12Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-70",
+  "status": "done",
+  "tags": null,
+  "title": "Scale vessel markers by zoom level",
+  "type": "task",
+  "updated_at": "2026-02-25T23:39:12Z",
+  "urgency": null
+}

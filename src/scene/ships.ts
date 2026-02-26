@@ -375,6 +375,7 @@ const _deadReckonTarget = new THREE.Vector3();
 export function animateShips(
   shipMarkers: Map<number, ShipMesh>,
   t: number,
+  zoomScale = 1,
 ): void {
   const now = Date.now();
 
@@ -384,6 +385,8 @@ export function animateShips(
     const isAnchored = ship.navStatus === 1;
     const isMoored = ship.navStatus === 5;
     const isMoving = ship.sog > 2.4;
+    const blendedVisualScale = THREE.MathUtils.lerp(marker.scale.x || 1, zoomScale, 0.18);
+    marker.scale.setScalar(blendedVisualScale);
 
     // ── Time-based interpolation + dead reckoning ──
     if (isMoving && !isMoored) {

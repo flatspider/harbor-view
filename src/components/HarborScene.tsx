@@ -22,7 +22,13 @@ import { createWaterTiles, animateWaterTiles, disposeWaterTiles } from "../scene
 import { reconcileShips, animateShips } from "../scene/ships";
 import { createWindParticles, animateAtmosphere, disposeWindParticles } from "../scene/atmosphere";
 import { HARBOR_LABELS, projectLabels } from "../scene/labels";
-import { createSkyBackdrop, animateSky, disposeSkyBackdrop } from "../scene/sky";
+import {
+  createSkyBackdrop,
+  animateSky,
+  disposeSkyBackdrop,
+  getDefaultSkySettings,
+  type SkySettings,
+} from "../scene/sky";
 import {
   loadFerryRoutes,
   setFerryRouteNight,
@@ -37,6 +43,27 @@ interface HarborSceneProps {
   ships: Map<number, ShipData>;
   environment: HarborEnvironment;
 }
+
+type SkySettingKey = keyof SkySettings;
+
+interface SkySliderConfig {
+  key: SkySettingKey;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  digits: number;
+}
+
+const SKY_SLIDERS: SkySliderConfig[] = [
+  { key: "turbidity", label: "Turbidity", min: 0, max: 20, step: 0.1, digits: 1 },
+  { key: "rayleigh", label: "Rayleigh", min: 0, max: 4, step: 0.01, digits: 2 },
+  { key: "mieCoefficient", label: "Mie Coef", min: 0, max: 0.1, step: 0.0001, digits: 4 },
+  { key: "mieDirectionalG", label: "Mie Dir G", min: 0, max: 1, step: 0.001, digits: 3 },
+  { key: "elevation", label: "Elevation", min: -15, max: 90, step: 0.1, digits: 1 },
+  { key: "azimuth", label: "Azimuth", min: 0, max: 360, step: 0.1, digits: 1 },
+  { key: "exposure", label: "Exposure", min: 0, max: 2, step: 0.01, digits: 2 },
+];
 
 export function HarborScene({ ships, environment }: HarborSceneProps) {
   const sceneRef = useRef<HTMLDivElement>(null);
@@ -63,6 +90,11 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
   const backgroundColorRef = useRef(new THREE.Color());
   const skyMeshRef = useRef<THREE.Mesh | null>(null);
   const environmentRef = useRef(environment);
+  const [skyAutoMode, setSkyAutoMode] = useState(true);
+  const [skyPanelOpen, setSkyPanelOpen] = useState(false);
+  const [manualSkySettings, setManualSkySettings] = useState<SkySettings>(() => getDefaultSkySettings());
+  const skyAutoModeRef = useRef(skyAutoMode);
+  const manualSkySettingsRef = useRef(manualSkySettings);
   const [selectedShip, setSelectedShip] = useState<{
     ship: ShipData;
     x: number;
@@ -114,6 +146,22 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
   useEffect(() => {
     environmentRef.current = environment;
   }, [environment]);
+
+  useEffect(() => {
+    skyAutoModeRef.current = skyAutoMode;
+  }, [skyAutoMode]);
+
+  useEffect(() => {
+    manualSkySettingsRef.current = manualSkySettings;
+  }, [manualSkySettings]);
+
+  const handleSkySettingChange = useCallback((key: SkySettingKey, value: number) => {
+    setManualSkySettings((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const handleResetSkySettings = useCallback(() => {
+    setManualSkySettings(getDefaultSkySettings());
+  }, []);
 
   /* ── Scene Setup ───────────────────────────────────────────────────── */
 
@@ -346,10 +394,23 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       );
       rendererRef.current.setClearColor(backgroundColorRef.current, 1);
       if (skyMeshRef.current) {
-        animateSky(skyMeshRef.current, cachedNight, env);
+        const appliedSky = animateSky(
+          skyMeshRef.current,
+          cachedNight,
+          env,
+          skyAutoModeRef.current ? undefined : manualSkySettingsRef.current,
+        );
+        rendererRef.current.toneMappingExposure = appliedSky.exposure;
       }
       setFerryRouteNight(cachedNight);
-      animateShips(shipMarkers, t);
+      const cameraDistance = camera.position.distanceTo(controls.target);
+      const zoomProgress = THREE.MathUtils.clamp(
+        (cameraDistance - controls.minDistance) / Math.max(1, controls.maxDistance - controls.minDistance),
+        0,
+        1,
+      );
+      const shipZoomScale = THREE.MathUtils.lerp(0.9, 2.3, Math.pow(zoomProgress, 0.72));
+      animateShips(shipMarkers, t, shipZoomScale);
       controls.update();
 
       if (sceneRef.current && cameraRef.current) {
@@ -436,6 +497,51 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       </div>
       <div className="harbor-scene-overlay">
         Drag to pan, scroll to zoom, hover to inspect vessels and ferry routes.
+      </div>
+      <div
+        className="sky-controls"
+        onPointerDown={(event) => event.stopPropagation()}
+        onPointerMove={(event) => event.stopPropagation()}
+        onPointerUp={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button type="button" className="sky-controls-toggle" onClick={() => setSkyPanelOpen((open) => !open)}>
+          {skyPanelOpen ? "Hide Sky Controls" : "Sky Controls"}
+        </button>
+        {skyPanelOpen && (
+          <div className="sky-controls-panel">
+            <div className="sky-controls-row">
+              <label className="sky-controls-check">
+                <input type="checkbox" checked={skyAutoMode} onChange={(event) => setSkyAutoMode(event.target.checked)} />
+                Auto (weather + time)
+              </label>
+              <button type="button" className="sky-controls-reset" onClick={handleResetSkySettings}>
+                Reset
+              </button>
+            </div>
+            {SKY_SLIDERS.map((slider) => {
+              const value = manualSkySettings[slider.key];
+              return (
+                <label key={slider.key} className="sky-control-row">
+                  <span>{slider.label}</span>
+                  <input
+                    type="range"
+                    min={slider.min}
+                    max={slider.max}
+                    step={slider.step}
+                    value={value}
+                    disabled={skyAutoMode}
+                    onChange={(event) => handleSkySettingChange(slider.key, Number(event.target.value))}
+                  />
+                  <output>{value.toFixed(slider.digits)}</output>
+                </label>
+              );
+            })}
+            {skyAutoMode ? (
+              <p className="sky-controls-note">Auto mode uses live weather and time-of-day values. Disable to tune manually.</p>
+            ) : null}
+          </div>
+        )}
       </div>
       {selectedShip && (
         <ShipInfoCard

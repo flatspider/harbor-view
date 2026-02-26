@@ -9,27 +9,37 @@ interface SkyUniforms {
   mieCoefficient: { value: number };
   mieDirectionalG: { value: number };
   sunPosition: { value: THREE.Vector3 };
-  cloudScale: { value: number };
-  cloudSpeed: { value: number };
-  cloudCoverage: { value: number };
-  cloudDensity: { value: number };
-  cloudElevation: { value: number };
-  time: { value: number };
+}
+
+export interface SkySettings {
+  turbidity: number;
+  rayleigh: number;
+  mieCoefficient: number;
+  mieDirectionalG: number;
+  elevation: number;
+  azimuth: number;
+  exposure: number;
 }
 
 const _sunPosition = new THREE.Vector3();
+const SKY_DEFAULTS: SkySettings = {
+  turbidity: 10,
+  rayleigh: 3,
+  mieCoefficient: 0.005,
+  mieDirectionalG: 0.7,
+  elevation: 2,
+  azimuth: 180,
+  exposure: 0.6,
+};
 
-function getSunPosition(night: boolean): THREE.Vector3 {
+function getTimeSunAngles(night: boolean): { elevation: number; azimuth: number } {
   const now = new Date();
   const hours = now.getHours() + now.getMinutes() / 60;
   const daylightT = THREE.MathUtils.clamp((hours - 6) / 12, 0, 1);
 
   const elevation = night ? -6 : 2 + Math.sin(daylightT * Math.PI) * 68;
   const azimuth = 180 + (daylightT - 0.5) * 160;
-  const phi = THREE.MathUtils.degToRad(90 - elevation);
-  const theta = THREE.MathUtils.degToRad(azimuth);
-
-  return _sunPosition.setFromSphericalCoords(1, phi, theta);
+  return { elevation, azimuth };
 }
 
 function getSkyUniforms(mesh: THREE.Mesh): SkyUniforms | null {
@@ -41,17 +51,58 @@ function getSkyUniforms(mesh: THREE.Mesh): SkyUniforms | null {
     !uniforms.rayleigh ||
     !uniforms.mieCoefficient ||
     !uniforms.mieDirectionalG ||
-    !uniforms.sunPosition ||
-    !uniforms.cloudScale ||
-    !uniforms.cloudSpeed ||
-    !uniforms.cloudCoverage ||
-    !uniforms.cloudDensity ||
-    !uniforms.cloudElevation ||
-    !uniforms.time
+    !uniforms.sunPosition
   ) {
     return null;
   }
   return uniforms as SkyUniforms;
+}
+
+function clampSettings(input: SkySettings): SkySettings {
+  return {
+    turbidity: THREE.MathUtils.clamp(input.turbidity, 0, 20),
+    rayleigh: THREE.MathUtils.clamp(input.rayleigh, 0, 4),
+    mieCoefficient: THREE.MathUtils.clamp(input.mieCoefficient, 0, 0.1),
+    mieDirectionalG: THREE.MathUtils.clamp(input.mieDirectionalG, 0, 1),
+    elevation: THREE.MathUtils.clamp(input.elevation, -15, 90),
+    azimuth: THREE.MathUtils.euclideanModulo(input.azimuth, 360),
+    exposure: THREE.MathUtils.clamp(input.exposure, 0, 2),
+  };
+}
+
+export function getDefaultSkySettings(): SkySettings {
+  return { ...SKY_DEFAULTS };
+}
+
+function getAutoSkySettings(night: boolean, env: HarborEnvironment): SkySettings {
+  const mood = moodFromForecast(env.forecastSummary);
+  const cloudiness = mood === "rain" ? 0.95 : mood === "overcast" ? 0.72 : mood === "fog" ? 0.86 : 0.25;
+  const windFactor = THREE.MathUtils.clamp(env.windSpeedMph / 35, 0, 1);
+  const { elevation, azimuth } = getTimeSunAngles(night);
+
+  if (night) {
+    const moonBoost = THREE.MathUtils.lerp(0.04, 0.22, THREE.MathUtils.clamp(env.moonIllumination, 0, 1));
+    return clampSettings({
+      turbidity: 12.5 + cloudiness * 2.4,
+      rayleigh: 0.15 + moonBoost,
+      mieCoefficient: 0.008 + cloudiness * 0.012,
+      mieDirectionalG: 0.82 + windFactor * 0.1,
+      elevation,
+      azimuth,
+      exposure: 0.2 + moonBoost * 0.9,
+    });
+  }
+
+  const clearFactor = 1 - cloudiness;
+  return clampSettings({
+    turbidity: 6.4 + cloudiness * 7.2,
+    rayleigh: mood === "fog" ? 0.4 : 1.2 + clearFactor * 2.1,
+    mieCoefficient: 0.003 + cloudiness * 0.015,
+    mieDirectionalG: mood === "fog" ? 0.7 : 0.74 + cloudiness * 0.18,
+    elevation,
+    azimuth,
+    exposure: 0.5 + clearFactor * 0.4,
+  });
 }
 
 /** Create Three.js Sky object (same model as webgl_shaders_sky). */
@@ -62,29 +113,27 @@ export function createSkyBackdrop(scene: THREE.Scene): THREE.Mesh {
   return sky;
 }
 
-/** Animate sky scattering/cloud uniforms each frame. */
+/** Animate sky scattering uniforms each frame. */
 export function animateSky(
   skyMesh: THREE.Mesh,
   night: boolean,
   env: HarborEnvironment,
-): void {
+  manualSettings?: SkySettings,
+): SkySettings {
   const uniforms = getSkyUniforms(skyMesh);
-  if (!uniforms) return;
+  const settings = manualSettings ? clampSettings(manualSettings) : getAutoSkySettings(night, env);
+  if (!uniforms) return settings;
 
-  const mood = moodFromForecast(env.forecastSummary);
-  const cloudiness = mood === "rain" ? 0.42 : mood === "overcast" ? 0.34 : mood === "fog" ? 0.24 : 0.14;
+  uniforms.turbidity.value = settings.turbidity;
+  uniforms.rayleigh.value = settings.rayleigh;
+  uniforms.mieCoefficient.value = settings.mieCoefficient;
+  uniforms.mieDirectionalG.value = settings.mieDirectionalG;
 
-  uniforms.turbidity.value = night ? 9.5 : 4.2 + cloudiness * 4.1;
-  uniforms.rayleigh.value = night ? 0.18 + env.moonIllumination * 0.12 : mood === "fog" ? 0.4 : 0.92;
-  uniforms.mieCoefficient.value = night ? 0.009 : 0.0035 + cloudiness * 0.0028;
-  uniforms.mieDirectionalG.value = night ? 0.88 : mood === "fog" ? 0.73 : 0.8;
-  uniforms.cloudCoverage.value = night ? 0.24 : cloudiness;
-  uniforms.cloudDensity.value = night ? 0.18 : THREE.MathUtils.clamp(cloudiness * 0.72, 0.09, 0.32);
-  uniforms.cloudScale.value = 0.00016;
-  uniforms.cloudSpeed.value = night ? 0.000035 : 0.00006;
-  uniforms.cloudElevation.value = 0.5;
-  uniforms.time.value = performance.now() * 0.00004;
-  uniforms.sunPosition.value.copy(getSunPosition(night));
+  const phi = THREE.MathUtils.degToRad(90 - settings.elevation);
+  const theta = THREE.MathUtils.degToRad(settings.azimuth);
+  uniforms.sunPosition.value.copy(_sunPosition.setFromSphericalCoords(1, phi, theta));
+
+  return settings;
 }
 
 /** Dispose sky resources. */

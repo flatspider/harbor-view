@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-26T19:18:51Z",
+  "created_by": "agent:codex",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-26T19:19:30Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJDP8K197E19R68MZFE9DW2K",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJDP7G0JAKT808BX6FRKHE9A",
+  "last_event_id": "ev_01KJDP8NT01EBSKXYK2K9CZNWT",
+  "last_status_changed_at": "2026-02-26T19:19:30Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-81",
+  "status": "done",
+  "tags": null,
+  "title": "Restore all-ferry visual mode after performance optimization",
+  "type": "task",
+  "updated_at": "2026-02-26T19:19:30Z",
+  "urgency": null
+}

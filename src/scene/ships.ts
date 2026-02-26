@@ -255,6 +255,9 @@ const SHIP_BOUNDARY_SCALE_STEPS = [1, 0.86, 0.74, 0.62] as const;
 const SHIP_LAND_CLEARANCE = 2.5;
 const SHIP_BOUNDARY_SAMPLE_SPACING = 8;
 const SHIP_WATER_FALLBACK_RADIUS = 120;
+const SHIP_POSITION_RECONCILE_EPSILON = 0.000015;
+const SHIP_BOUNDARY_RECHECK_INTERVAL_MS = 900;
+const SHIP_BOUNDARY_RECHECK_MOVING_INTERVAL_MS = 450;
 
 interface ResolvedShipTarget {
   target: THREE.Vector3 | null;
@@ -451,28 +454,42 @@ export function reconcileShips(
     const mmsi = ship.mmsi;
     const category = getShipCategory(ship.shipType);
     const style = CATEGORY_STYLES[category];
-    const baseTarget = latLonToWorld(ship.lat, ship.lon);
     const radius = getShipCollisionRadius(ship, style);
     const existing = shipMarkers.get(mmsi);
     const nextSizeScale = computeShipSizeScale(ship, style);
     const footprintRadius = getShipFootprintRadius(nextSizeScale);
-
-    const collisionPlacement = resolveShipTarget(baseTarget, mmsi, radius, footprintRadius, occupiedSlots);
-    let placementTarget = collisionPlacement.target;
-    let boundaryScale = collisionPlacement.boundaryScale;
-    if (!placementTarget) {
-      fallbackPlacements += 1;
-      const waterFallback = resolveWaterOnlyTarget(baseTarget, mmsi, footprintRadius);
-      placementTarget = waterFallback.target;
-      boundaryScale = waterFallback.boundaryScale;
-    }
+    let placementTarget: THREE.Vector3 | null = null;
+    let boundaryScale = 1;
 
     if (existing) {
       const markerData = getShipMarkerData(existing);
+      const previousShip = markerData.ship;
+      const needsPlacementResolve =
+        markerData.hiddenByBoundary ||
+        Math.abs(ship.lat - previousShip.lat) > SHIP_POSITION_RECONCILE_EPSILON ||
+        Math.abs(ship.lon - previousShip.lon) > SHIP_POSITION_RECONCILE_EPSILON;
+
+      if (needsPlacementResolve) {
+        const baseTarget = latLonToWorld(ship.lat, ship.lon);
+        const collisionPlacement = resolveShipTarget(baseTarget, mmsi, radius, footprintRadius, occupiedSlots);
+        placementTarget = collisionPlacement.target;
+        boundaryScale = collisionPlacement.boundaryScale;
+        if (!placementTarget) {
+          fallbackPlacements += 1;
+          const waterFallback = resolveWaterOnlyTarget(baseTarget, mmsi, footprintRadius);
+          placementTarget = waterFallback.target;
+          boundaryScale = waterFallback.boundaryScale;
+        }
+      } else {
+        placementTarget = markerData.target;
+        boundaryScale = markerData.boundaryScale;
+      }
+
       markerData.ship = ship;
       markerData.radius = radius;
       markerData.boundaryScale = boundaryScale;
       markerData.hiddenByBoundary = !placementTarget;
+      markerData.nextBoundaryCheckAt = Date.now() + SHIP_BOUNDARY_RECHECK_INTERVAL_MS;
       if (placementTarget) markerData.target.copy(placementTarget);
 
       const needsGeometryRefresh =
@@ -536,6 +553,17 @@ export function reconcileShips(
       nextShipIds.add(mmsi);
       updatedMarkers += 1;
       continue;
+    }
+
+    const baseTarget = latLonToWorld(ship.lat, ship.lon);
+    const collisionPlacement = resolveShipTarget(baseTarget, mmsi, radius, footprintRadius, occupiedSlots);
+    placementTarget = collisionPlacement.target;
+    boundaryScale = collisionPlacement.boundaryScale;
+    if (!placementTarget) {
+      fallbackPlacements += 1;
+      const waterFallback = resolveWaterOnlyTarget(baseTarget, mmsi, footprintRadius);
+      placementTarget = waterFallback.target;
+      boundaryScale = waterFallback.boundaryScale;
     }
 
     // New ship — place in water with boundary + collision checks.
@@ -608,6 +636,7 @@ export function reconcileShips(
       sizeScale: nextSizeScale,
       boundaryScale,
       hiddenByBoundary: false,
+      nextBoundaryCheckAt: Date.now() + SHIP_BOUNDARY_RECHECK_INTERVAL_MS,
     } as ShipMarkerData;
 
     scene.add(hull);
@@ -719,23 +748,32 @@ export function animateShips(
       }
     }
 
-    const runtimeFootprint = getShipFootprintRadius(markerData.sizeScale);
-    if (!isWorldCircleNavigable(markerData.target.x, markerData.target.z, runtimeFootprint * markerData.boundaryScale)) {
-      const waterFallback = resolveWaterOnlyTarget(
-        markerData.target,
-        markerData.mmsi,
-        runtimeFootprint,
-        markerData.boundaryScale,
-      );
-      if (!waterFallback.target) {
-        markerData.hiddenByBoundary = true;
-        marker.visible = false;
-        markerData.wake.visible = false;
-        continue;
+    const boundaryRecheckInterval = isMoving
+      ? SHIP_BOUNDARY_RECHECK_MOVING_INTERVAL_MS
+      : SHIP_BOUNDARY_RECHECK_INTERVAL_MS;
+    if (!Number.isFinite(markerData.nextBoundaryCheckAt)) {
+      markerData.nextBoundaryCheckAt = now;
+    }
+    if (now >= markerData.nextBoundaryCheckAt) {
+      markerData.nextBoundaryCheckAt = now + boundaryRecheckInterval;
+      const runtimeFootprint = getShipFootprintRadius(markerData.sizeScale);
+      if (!isWorldCircleNavigable(markerData.target.x, markerData.target.z, runtimeFootprint * markerData.boundaryScale)) {
+        const waterFallback = resolveWaterOnlyTarget(
+          markerData.target,
+          markerData.mmsi,
+          runtimeFootprint,
+          markerData.boundaryScale,
+        );
+        if (!waterFallback.target) {
+          markerData.hiddenByBoundary = true;
+          marker.visible = false;
+          markerData.wake.visible = false;
+          continue;
+        }
+        markerData.boundaryScale = waterFallback.boundaryScale;
+        markerData.target.copy(waterFallback.target);
+        marker.scale.setScalar(blendedVisualScale * markerData.boundaryScale);
       }
-      markerData.boundaryScale = waterFallback.boundaryScale;
-      markerData.target.copy(waterFallback.target);
-      marker.scale.setScalar(blendedVisualScale * markerData.boundaryScale);
     }
 
     marker.position.lerp(markerData.target, followStrength);

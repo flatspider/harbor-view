@@ -87,6 +87,9 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
   const raycasterRef = useRef(new THREE.Raycaster());
   const pointerRef = useRef(new THREE.Vector2());
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
+  const pointerMoveEventRef = useRef<{ x: number; y: number } | null>(null);
+  const pointerMoveRafRef = useRef<number | null>(null);
+  const hoverColorRef = useRef(new THREE.Color());
   const hoveredShipRef = useRef<ShipMesh | null>(null);
   const hoveredFerryRef = useRef<THREE.Line | null>(null);
   const animationRef = useRef<number | null>(null);
@@ -284,48 +287,63 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     const windParticles = createWindParticles(scene);
     windParticlesRef.current = windParticles;
 
+    const newTiles = createWaterTiles(scene);
+    tiles.push(...newTiles);
+
     void (async () => {
       let visualAssetsUpdated = false;
+      const visualLoadTasks: Promise<void>[] = [];
+
       if (!shipCategoryTexturesRef.current) {
-        try {
-          const textures = await loadShipCategoryTextures();
-          if (!abortController.signal.aborted) {
-            shipCategoryTexturesRef.current = textures;
-            visualAssetsUpdated = true;
-          }
-        } catch (error) {
-          console.error("[harbor] Failed to load ship category textures", error);
-        }
+        visualLoadTasks.push(
+          loadShipCategoryTextures()
+            .then((textures) => {
+              if (abortController.signal.aborted) return;
+              shipCategoryTexturesRef.current = textures;
+              visualAssetsUpdated = true;
+            })
+            .catch((error) => {
+              console.error("[harbor] Failed to load ship category textures", error);
+            }),
+        );
       }
+
       if (!passengerFerryPrototypeRef.current) {
-        try {
-          const prototype = await loadPassengerFerryPrototype();
-          if (!abortController.signal.aborted) {
-            passengerFerryPrototypeRef.current = prototype;
-            visualAssetsUpdated = true;
-          }
-        } catch (error) {
-          console.error("[harbor] Failed to load passenger ferry model", error);
-        }
+        visualLoadTasks.push(
+          loadPassengerFerryPrototype()
+            .then((prototype) => {
+              if (abortController.signal.aborted) return;
+              passengerFerryPrototypeRef.current = prototype;
+              visualAssetsUpdated = true;
+            })
+            .catch((error) => {
+              console.error("[harbor] Failed to load passenger ferry model", error);
+            }),
+        );
       }
-      if (visualAssetsUpdated && !abortController.signal.aborted) {
-        setShipVisualAssetsRevision((prev) => prev + 1);
-      }
+
       if (RENDER_LAND_POLYGONS) {
         await loadLandPolygons(scene, abortController.signal);
       }
       if (abortController.signal.aborted) return;
 
-      const newTiles = createWaterTiles(scene);
-      tiles.push(...newTiles);
-
       if (RENDER_SMOKE_SKYLINE) {
         await loadSkylineSmoke(scene, abortController.signal);
       }
       if (abortController.signal.aborted) return;
+
       await loadFerryRoutes(scene, abortController.signal);
-      ferryRouteTargets.length = 0;
-      ferryRouteTargets.push(...getFerryRouteTargets());
+      if (!abortController.signal.aborted) {
+        ferryRouteTargets.length = 0;
+        ferryRouteTargets.push(...getFerryRouteTargets());
+      }
+
+      if (visualLoadTasks.length > 0) {
+        await Promise.allSettled(visualLoadTasks);
+      }
+      if (visualAssetsUpdated && !abortController.signal.aborted) {
+        setShipVisualAssetsRevision((prev) => prev + 1);
+      }
     })();
 
     // Resize
@@ -363,11 +381,14 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       }
     };
 
-    const handlePointerMove = (event: PointerEvent) => {
+    const processPointerMove = () => {
+      pointerMoveRafRef.current = null;
       if (!sceneRef.current || !cameraRef.current) return;
+      const pointerEvent = pointerMoveEventRef.current;
+      if (!pointerEvent) return;
       const rect = sceneRef.current.getBoundingClientRect();
-      pointerRef.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      pointerRef.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      pointerRef.current.x = ((pointerEvent.x - rect.left) / rect.width) * 2 - 1;
+      pointerRef.current.y = -((pointerEvent.y - rect.top) / rect.height) * 2 + 1;
       raycasterRef.current.setFromCamera(pointerRef.current, cameraRef.current);
 
       raycastTargets.length = 0;
@@ -388,7 +409,8 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
           hoveredFerryRef.current = null;
         }
         const hoveredData = getShipMarkerData(hoveredMarker);
-        hoveredMarker.material.color.copy(hoveredData.baseColor.clone().offsetHSL(0, 0.12, 0.16));
+        hoverColorRef.current.copy(hoveredData.baseColor).offsetHSL(0, 0.12, 0.16);
+        hoveredMarker.material.color.copy(hoverColorRef.current);
         mount.style.cursor = "pointer";
       } else {
         const ferryHits = raycasterRef.current.intersectObjects(ferryRouteTargets, true);
@@ -407,6 +429,12 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         hoveredFerryRef.current = hoveredFerry;
       }
       hoveredShipRef.current = hoveredMarker;
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      pointerMoveEventRef.current = { x: event.clientX, y: event.clientY };
+      if (pointerMoveRafRef.current != null) return;
+      pointerMoveRafRef.current = requestAnimationFrame(processPointerMove);
     };
 
     const handlePointerUp = (event: PointerEvent) => {
@@ -457,6 +485,8 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     // Animation loop
     let nextNightCheck = performance.now();
     let cachedNight = isNightTime();
+    let appliedFerryNight = cachedNight;
+    setFerryRouteNight(appliedFerryNight);
     const loopToken = frameLoopTokenRef.current + 1;
     frameLoopTokenRef.current = loopToken;
 
@@ -493,7 +523,10 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         );
         rendererRef.current.toneMappingExposure = appliedSky.exposure;
       }
-      setFerryRouteNight(cachedNight);
+      if (cachedNight !== appliedFerryNight) {
+        setFerryRouteNight(cachedNight);
+        appliedFerryNight = cachedNight;
+      }
       const zoomProgress = THREE.MathUtils.clamp(
         (cameraDistance - controls.minDistance) / Math.max(1, controls.maxDistance - controls.minDistance),
         0,
@@ -525,6 +558,12 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
       mount.removeEventListener("pointerdown", handlePointerDown);
       mount.removeEventListener("pointermove", handlePointerMove);
       mount.removeEventListener("pointerup", handlePointerUp);
+      if (pointerMoveRafRef.current != null) {
+        cancelAnimationFrame(pointerMoveRafRef.current);
+        pointerMoveRafRef.current = null;
+      }
+      pointerMoveEventRef.current = null;
+      pointerDownRef.current = null;
       frameLoopTokenRef.current += 1;
       if (animationRef.current != null) cancelAnimationFrame(animationRef.current);
       animationRef.current = null;

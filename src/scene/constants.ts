@@ -132,6 +132,7 @@ export interface ShipMarkerData {
   sizeScale: number;
   boundaryScale: number;
   hiddenByBoundary: boolean;
+  nextBoundaryCheckAt: number;
 }
 
 export type ShipMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshToonMaterial>;

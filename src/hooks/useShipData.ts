@@ -12,6 +12,28 @@ interface ShipsApiResponse {
   ships?: ShipData[];
 }
 
+function hasShipDataChanged(prev: ShipData, next: ShipData): boolean {
+  return (
+    prev.mmsi !== next.mmsi ||
+    prev.name !== next.name ||
+    prev.lat !== next.lat ||
+    prev.lon !== next.lon ||
+    prev.prevLat !== next.prevLat ||
+    prev.prevLon !== next.prevLon ||
+    prev.cog !== next.cog ||
+    prev.sog !== next.sog ||
+    prev.heading !== next.heading ||
+    prev.navStatus !== next.navStatus ||
+    prev.shipType !== next.shipType ||
+    prev.destination !== next.destination ||
+    prev.callSign !== next.callSign ||
+    prev.lengthM !== next.lengthM ||
+    prev.beamM !== next.beamM ||
+    prev.lastUpdate !== next.lastUpdate ||
+    prev.lastPositionUpdate !== next.lastPositionUpdate
+  );
+}
+
 export function useShipData({ enabled = true }: UseShipDataOptions = {}) {
   const [ships, setShips] = useState<Map<number, ShipData>>(new Map());
   const [connectionStatus, setConnectionStatus] =
@@ -20,8 +42,11 @@ export function useShipData({ enabled = true }: UseShipDataOptions = {}) {
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined,
   );
+  const fetchInFlightRef = useRef(false);
 
   const fetchShips = useCallback(async () => {
+    if (fetchInFlightRef.current) return;
+    fetchInFlightRef.current = true;
     try {
       const response = await fetch("/api/ships", {
         cache: "no-store",
@@ -35,10 +60,25 @@ export function useShipData({ enabled = true }: UseShipDataOptions = {}) {
       const nextStatus = payload.status ?? "error";
       const nextShips = payload.ships ?? [];
 
-      setConnectionStatus(nextStatus);
-      setShips(new Map(nextShips.map((ship) => [ship.mmsi, ship])));
+      setConnectionStatus((prev) => (prev === nextStatus ? prev : nextStatus));
+      setShips((prev) => {
+        if (prev.size === nextShips.length) {
+          let changed = false;
+          for (const ship of nextShips) {
+            const previousShip = prev.get(ship.mmsi);
+            if (!previousShip || hasShipDataChanged(previousShip, ship)) {
+              changed = true;
+              break;
+            }
+          }
+          if (!changed) return prev;
+        }
+        return new Map(nextShips.map((ship) => [ship.mmsi, ship]));
+      });
     } catch {
-      setConnectionStatus("error");
+      setConnectionStatus((prev) => (prev === "error" ? prev : "error"));
+    } finally {
+      fetchInFlightRef.current = false;
     }
   }, []);
 
@@ -58,6 +98,7 @@ export function useShipData({ enabled = true }: UseShipDataOptions = {}) {
 
     return () => {
       clearInterval(pollIntervalRef.current);
+      fetchInFlightRef.current = false;
     };
   }, [enabled, fetchShips]);
 

@@ -214,8 +214,7 @@ export function reconcileShips(
       const markerData = getShipMarkerData(existing);
       markerData.ship = ship;
       markerData.radius = radius;
-      const nextTarget = isPointOnLand(ship.lon, ship.lat) ? markerData.target : baseTarget;
-      markerData.target.copy(nextTarget);
+      markerData.target.copy(baseTarget);
 
       const needsGeometryRefresh =
         markerData.category !== category || Math.abs(markerData.sizeScale - nextSizeScale) > 0.04;
@@ -255,7 +254,7 @@ export function reconcileShips(
       }
 
       nextShipIds.add(mmsi);
-      occupiedSlots.push({ mmsi, radius, x: nextTarget.x, z: nextTarget.z });
+      occupiedSlots.push({ mmsi, radius, x: baseTarget.x, z: baseTarget.z });
       updatedMarkers += 1;
       continue;
     }

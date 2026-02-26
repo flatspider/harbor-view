@@ -121,7 +121,7 @@ export const NAV_STATUS: Record<number, string> = {
 // NY Harbor bounding box
 export const NY_HARBOR_BOUNDS = {
   south: 40.48,
-  north: 40.78,
+  north: 40.92,
   west: -74.26,
   east: -73.9,
 } as const;

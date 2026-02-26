@@ -23,13 +23,13 @@ export interface SkySettings {
 
 const _sunPosition = new THREE.Vector3();
 const SKY_DEFAULTS: SkySettings = {
-  turbidity: 10,
+  turbidity: 8,
   rayleigh: 3,
   mieCoefficient: 0.005,
   mieDirectionalG: 0.7,
-  elevation: 2,
+  elevation: 8,
   azimuth: 180,
-  exposure: 0.6,
+  exposure: 0.72,
 };
 
 function getTimeSunAngles(night: boolean): { elevation: number; azimuth: number } {

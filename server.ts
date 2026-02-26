@@ -13,7 +13,7 @@ const AIS_API_KEY =
 
 const NY_HARBOR_BOUNDS = {
   south: 40.48,
-  north: 40.78,
+  north: 40.92,
   west: -74.26,
   east: -73.9,
 } as const;

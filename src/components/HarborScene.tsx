@@ -221,13 +221,13 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
     controlsRef.current = controls;
 
     // Lighting
-    const hemiLight = new THREE.HemisphereLight("#d9eef8", "#4f6e88", 0.85);
+    const hemiLight = new THREE.HemisphereLight("#d9eef8", "#8b6d4a", 0.85);
     hemiLight.position.set(0, 600, 0);
     scene.add(hemiLight);
     hemiLightRef.current = hemiLight;
 
-    const sunLight = new THREE.DirectionalLight("#f6e5b1", 1.1);
-    sunLight.position.set(-400, 700, 300);
+    const sunLight = new THREE.DirectionalLight("#ffb347", 1.3);
+    sunLight.position.set(-500, 180, 400);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 1024;
     sunLight.shadow.mapSize.height = 1024;
@@ -389,6 +389,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         nextNightCheck = time + 30_000;
       }
 
+      const cameraDistance = camera.position.distanceTo(controls.target);
       animateWaterTiles(tiles, env, t, cachedNight);
       animateAtmosphere(
         sceneInstanceRef.current,
@@ -398,6 +399,7 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         sunLightRef.current!,
         backgroundColorRef.current,
         cachedNight,
+        cameraDistance,
       );
       rendererRef.current.setClearColor(backgroundColorRef.current, 1);
       if (skyMeshRef.current) {
@@ -410,7 +412,6 @@ export function HarborScene({ ships, environment }: HarborSceneProps) {
         rendererRef.current.toneMappingExposure = appliedSky.exposure;
       }
       setFerryRouteNight(cachedNight);
-      const cameraDistance = camera.position.distanceTo(controls.target);
       const zoomProgress = THREE.MathUtils.clamp(
         (cameraDistance - controls.minDistance) / Math.max(1, controls.maxDistance - controls.minDistance),
         0,

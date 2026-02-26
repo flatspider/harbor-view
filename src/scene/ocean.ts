@@ -75,7 +75,7 @@ const FLOW_CELLS: FlowCell[] = [
   { x: WORLD_WIDTH * 0.04, z: WORLD_DEPTH * 0.18, radius: 280, strength: 0.36, clockwise: true },
 ];
 
-const WATER_SHORELINE_PAD = 12;
+const WATER_EDGE_MARGIN = 140;
 const WATER_SUBDIVISIONS_PER_TILE = 18;
 const MIN_WATER_SUBDIVISIONS = 48;
 const FORCE_TEST_CURRENT = true;
@@ -91,10 +91,13 @@ function createWaterNormalsTexture(): THREE.Texture {
 }
 
 function getWaterBounds(): WaterBounds {
-  const halfWidth = WORLD_WIDTH * 0.5;
-  const halfDepth = WORLD_DEPTH * 0.5;
+  const worldMinX = -WORLD_WIDTH * 0.5;
+  const worldMaxX = WORLD_WIDTH * 0.5;
+  const worldMinZ = -WORLD_DEPTH * 0.5;
+  const worldMaxZ = WORLD_DEPTH * 0.5;
+
   if (landPolygonRings.length === 0) {
-    return { minX: -halfWidth, maxX: halfWidth, minZ: -halfDepth, maxZ: halfDepth };
+    return { minX: worldMinX, maxX: worldMaxX, minZ: worldMinZ, maxZ: worldMaxZ };
   }
 
   let minLon = Infinity;
@@ -109,7 +112,7 @@ function getWaterBounds(): WaterBounds {
   }
 
   if (!Number.isFinite(minLon) || !Number.isFinite(maxLon) || !Number.isFinite(minLat) || !Number.isFinite(maxLat)) {
-    return { minX: -halfWidth, maxX: halfWidth, minZ: -halfDepth, maxZ: halfDepth };
+    return { minX: worldMinX, maxX: worldMaxX, minZ: worldMinZ, maxZ: worldMaxZ };
   }
 
   const westX = latLonToWorld(minLat, minLon).x;
@@ -118,10 +121,10 @@ function getWaterBounds(): WaterBounds {
   const northZ = latLonToWorld(maxLat, minLon).z;
 
   return {
-    minX: THREE.MathUtils.clamp(Math.min(westX, eastX) - WATER_SHORELINE_PAD, -halfWidth, halfWidth),
-    maxX: THREE.MathUtils.clamp(Math.max(westX, eastX) + WATER_SHORELINE_PAD, -halfWidth, halfWidth),
-    minZ: THREE.MathUtils.clamp(Math.min(southZ, northZ) - WATER_SHORELINE_PAD, -halfDepth, halfDepth),
-    maxZ: THREE.MathUtils.clamp(Math.max(southZ, northZ) + WATER_SHORELINE_PAD, -halfDepth, halfDepth),
+    minX: Math.min(worldMinX, westX, eastX) - WATER_EDGE_MARGIN,
+    maxX: Math.max(worldMaxX, westX, eastX) + WATER_EDGE_MARGIN,
+    minZ: Math.min(worldMinZ, southZ, northZ) - WATER_EDGE_MARGIN,
+    maxZ: Math.max(worldMaxZ, southZ, northZ) + WATER_EDGE_MARGIN,
   };
 }
 
@@ -407,7 +410,12 @@ export function createWaterTiles(scene: THREE.Scene): WaterTile[] {
     baseXZ,
     lightnessOffset,
   });
-  shaderTiles.push({ mesh: water, baseX: centerX, baseZ: centerZ, lightnessOffset, normalTexture });
+  const shaderTile = { mesh: water, baseX: centerX, baseZ: centerZ, lightnessOffset, normalTexture };
+  shaderTiles.push(shaderTile);
+  if (landPolygonRings.length > 0) {
+    applyLandMaskToTile(shaderTile);
+    _landMaskApplied = true;
+  }
 
   createCurrentArrows(scene, minX, maxX, minZ, maxZ);
 

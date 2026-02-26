@@ -35,6 +35,7 @@ export function animateAtmosphere(
   sunLight: THREE.DirectionalLight,
   backgroundColor: THREE.Color,
   night: boolean,
+  cameraDistance: number,
 ): void {
   const mood = moodFromForecast(env.forecastSummary);
 
@@ -55,6 +56,9 @@ export function animateAtmosphere(
   const pressureFogScale = 0.7 + pressureNorm * 0.3;
   fog.near *= pressureFogScale;
   fog.far *= pressureFogScale;
+  const minFogFar = cameraDistance * 1.35 + 260;
+  fog.far = Math.max(fog.far, minFogFar);
+  fog.near = Math.min(fog.near, fog.far * 0.7);
 
   if (night) {
     const nightFogBase = new THREE.Color("#1d2b3b");

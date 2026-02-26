@@ -66,10 +66,10 @@ export function createShipGeometry(category: string, sizeScale: number): THREE.B
 
 export function createWakeGeometry(): THREE.BufferGeometry {
   const shape = new THREE.Shape();
-  shape.moveTo(0, 4);
-  shape.lineTo(-6.6, -35);
-  shape.lineTo(6.6, -35);
-  shape.lineTo(0, -10);
+  shape.moveTo(0, 1.6);
+  shape.lineTo(-2.8, -9.5);
+  shape.lineTo(2.8, -9.5);
+  shape.lineTo(0, -3.1);
   shape.closePath();
   const geometry = new THREE.ShapeGeometry(shape);
   geometry.rotateX(-Math.PI / 2);
@@ -164,6 +164,12 @@ function getShipCategoryVisual(parent: THREE.Object3D): THREE.Object3D | null {
   return parent.children.find((child) => SHIP_CATEGORY_VISUAL_NAMES.has(child.name)) ?? null;
 }
 
+function hasVisibleShipBody(marker: ShipMesh): boolean {
+  const hullVisible = marker.material.opacity > 0.02;
+  const categoryVisual = getShipCategoryVisual(marker);
+  return hullVisible || categoryVisual !== null;
+}
+
 function createShipCategoryVisual(
   category: ShipCategory,
   sizeScale: number,
@@ -254,7 +260,6 @@ export function getShipCollisionRadius(ship: ShipData, style: ShipCategoryStyle)
 const SHIP_BOUNDARY_SCALE_STEPS = [1, 0.86, 0.74, 0.62] as const;
 const SHIP_LAND_CLEARANCE = 2.5;
 const SHIP_BOUNDARY_SAMPLE_SPACING = 8;
-const SHIP_WATER_FALLBACK_RADIUS = 120;
 const SHIP_POSITION_RECONCILE_EPSILON = 0.000015;
 const SHIP_BOUNDARY_RECHECK_INTERVAL_MS = 900;
 const SHIP_BOUNDARY_RECHECK_MOVING_INTERVAL_MS = 450;
@@ -273,6 +278,8 @@ const SHIP_MAX_CORRECTION_UNITS = 22;
 const SHIP_TARGET_DAMPING_TAU_MS = 2200;
 const SHIP_POSITION_DAMPING_TAU_MOVING_MS = 1600;
 const SHIP_POSITION_DAMPING_TAU_IDLE_MS = 2600;
+const SHIP_RENDER_LIMIT = 80;
+const SHIP_INVALID_POSITION_HIDE_STRIKES = 4;
 
 interface ResolvedShipTarget {
   target: THREE.Vector3 | null;
@@ -560,45 +567,6 @@ export function resolveShipTarget(
   };
 }
 
-function resolveWaterOnlyTarget(
-  desired: THREE.Vector3,
-  mmsi: number,
-  footprintRadius: number,
-  maxBoundaryScale = 1,
-): ResolvedShipTarget {
-  const boundaryScaleSteps = getBoundaryScaleSteps(maxBoundaryScale);
-
-  for (const boundaryScale of boundaryScaleSteps) {
-    const effectiveFootprintRadius = footprintRadius * boundaryScale;
-    if (isWorldCircleNavigable(desired.x, desired.z, effectiveFootprintRadius)) {
-      return {
-        target: desired.clone(),
-        boundaryScale,
-      };
-    }
-  }
-
-  const maxRadius = Math.min(SHIP_PLACEMENT_MAX_RADIUS, SHIP_WATER_FALLBACK_RADIUS);
-  const candidates = buildPlacementCandidates(desired, mmsi, maxRadius, SHIP_PLACEMENT_STEP);
-
-  for (const boundaryScale of boundaryScaleSteps) {
-    const effectiveFootprintRadius = footprintRadius * boundaryScale;
-    for (const candidate of candidates) {
-      if (candidate.x === desired.x && candidate.z === desired.z) continue;
-      if (!isWorldCircleNavigable(candidate.x, candidate.z, effectiveFootprintRadius)) continue;
-      return {
-        target: new THREE.Vector3(candidate.x, desired.y, candidate.z),
-        boundaryScale,
-      };
-    }
-  }
-
-  return {
-    target: null,
-    boundaryScale: boundaryScaleSteps[boundaryScaleSteps.length - 1] ?? 1,
-  };
-}
-
 /* ── Ship Reconciliation (create/update/remove) ──────────────────────── */
 
 export function reconcileShips(
@@ -611,22 +579,42 @@ export function reconcileShips(
 ): void {
   const shipsEffectStart = performance.now();
   let skippedNoPosition = 0;
-  let fallbackPlacements = 0;
+  let skippedOnLand = 0;
+  let skippedByBudget = 0;
   let createdMarkers = 0;
   let updatedMarkers = 0;
   let hiddenByBoundary = 0;
 
   const nextShipIds = new Set<number>();
   const occupiedSlots: OccupiedSlot[] = [];
-  const orderedShips = Array.from(ships.values()).sort(
-    (a, b) => (b.lengthM > 0 ? b.lengthM : 0) - (a.lengthM > 0 ? a.lengthM : 0),
-  );
-
-  for (const ship of orderedShips) {
+  const waterShips: ShipData[] = [];
+  for (const ship of ships.values()) {
     if (ship.lat === 0 && ship.lon === 0) {
       skippedNoPosition += 1;
       continue;
     }
+    const hasExistingMarker = shipMarkers.has(ship.mmsi);
+    if (isPointOnLand(ship.lon, ship.lat) && !hasExistingMarker) {
+      skippedOnLand += 1;
+      continue;
+    }
+    waterShips.push(ship);
+  }
+  const orderedShips = waterShips.sort((a, b) => {
+    const aMoving = sanitizeShipSpeedKnots(a.sog) > 1.2 ? 1 : 0;
+    const bMoving = sanitizeShipSpeedKnots(b.sog) > 1.2 ? 1 : 0;
+    if (aMoving !== bMoving) return bMoving - aMoving;
+    const aLength = a.lengthM > 0 ? a.lengthM : 0;
+    const bLength = b.lengthM > 0 ? b.lengthM : 0;
+    if (aLength !== bLength) return bLength - aLength;
+    return b.lastPositionUpdate - a.lastPositionUpdate;
+  });
+  if (orderedShips.length > SHIP_RENDER_LIMIT) {
+    skippedByBudget = orderedShips.length - SHIP_RENDER_LIMIT;
+  }
+  const renderShips = orderedShips.slice(0, SHIP_RENDER_LIMIT);
+
+  for (const ship of renderShips) {
     const mmsi = ship.mmsi;
     const category = getShipCategory(ship.shipType);
     const style = CATEGORY_STYLES[category];
@@ -660,12 +648,6 @@ export function reconcileShips(
           const collisionPlacement = resolveShipTarget(baseTarget, mmsi, radius, footprintRadius, occupiedSlots);
           placementTarget = collisionPlacement.target;
           boundaryScale = collisionPlacement.boundaryScale;
-          if (!placementTarget) {
-            fallbackPlacements += 1;
-            const waterFallback = resolveWaterOnlyTarget(baseTarget, mmsi, footprintRadius);
-            placementTarget = waterFallback.target;
-            boundaryScale = waterFallback.boundaryScale;
-          }
         }
       } else {
         placementTarget = markerData.target;
@@ -675,7 +657,18 @@ export function reconcileShips(
       markerData.ship = ship;
       markerData.radius = radius;
       markerData.boundaryScale = boundaryScale;
-      markerData.hiddenByBoundary = !placementTarget;
+      if (!placementTarget) {
+        markerData.invalidPositionStrikes += 1;
+        if (markerData.invalidPositionStrikes < SHIP_INVALID_POSITION_HIDE_STRIKES) {
+          placementTarget = markerData.target;
+          markerData.hiddenByBoundary = false;
+        } else {
+          markerData.hiddenByBoundary = true;
+        }
+      } else {
+        markerData.invalidPositionStrikes = 0;
+        markerData.hiddenByBoundary = false;
+      }
       markerData.nextBoundaryCheckAt = Date.now() + SHIP_BOUNDARY_RECHECK_INTERVAL_MS;
       if (placementTarget) {
         if (isMoored || sanitizedSog <= 0) {
@@ -765,14 +758,8 @@ export function reconcileShips(
     const collisionPlacement = resolveShipTarget(baseTarget, mmsi, radius, footprintRadius, occupiedSlots);
     placementTarget = collisionPlacement.target;
     boundaryScale = collisionPlacement.boundaryScale;
-    if (!placementTarget) {
-      fallbackPlacements += 1;
-      const waterFallback = resolveWaterOnlyTarget(baseTarget, mmsi, footprintRadius);
-      placementTarget = waterFallback.target;
-      boundaryScale = waterFallback.boundaryScale;
-    }
 
-    // New ship — place in water with boundary + collision checks.
+    // New ship — render only when direct placement is valid.
     if (!placementTarget) {
       hiddenByBoundary += 1;
       continue;
@@ -806,7 +793,8 @@ export function reconcileShips(
         polygonOffsetUnits: -1,
       }),
     );
-    wake.position.set(0, -SHIP_BASE_Y + WAKE_WORLD_Y, -16);
+    wake.position.set(0, -SHIP_BASE_Y + WAKE_WORLD_Y, -4);
+    wake.rotation.y = Math.PI;
     wake.renderOrder = 4;
     hull.add(wake);
 
@@ -852,6 +840,7 @@ export function reconcileShips(
       sizeScale: nextSizeScale,
       boundaryScale,
       hiddenByBoundary: false,
+      invalidPositionStrikes: 0,
       nextBoundaryCheckAt: Date.now() + SHIP_BOUNDARY_RECHECK_INTERVAL_MS,
     } as ShipMarkerData;
 
@@ -890,9 +879,10 @@ export function reconcileShips(
       apiShips: ships.size,
       renderedShips: nextShipIds.size,
       skippedNoPosition,
+      skippedOnLand,
+      skippedByBudget,
       createdMarkers,
       updatedMarkers,
-      fallbackPlacements,
       hiddenByBoundary,
     });
   }
@@ -956,21 +946,16 @@ export function animateShips(
       markerData.nextBoundaryCheckAt = now + boundaryRecheckInterval;
       const runtimeFootprint = getShipFootprintRadius(markerData.sizeScale);
       if (!isWorldCircleNavigable(markerData.target.x, markerData.target.z, runtimeFootprint * markerData.boundaryScale)) {
-        const waterFallback = resolveWaterOnlyTarget(
-          markerData.target,
-          markerData.mmsi,
-          runtimeFootprint,
-          markerData.boundaryScale,
-        );
-        if (!waterFallback.target) {
+        markerData.invalidPositionStrikes += 1;
+        if (markerData.invalidPositionStrikes >= SHIP_INVALID_POSITION_HIDE_STRIKES) {
           markerData.hiddenByBoundary = true;
           marker.visible = false;
           markerData.wake.visible = false;
           continue;
         }
-        markerData.boundaryScale = waterFallback.boundaryScale;
-        markerData.target.copy(waterFallback.target);
-        marker.scale.setScalar(blendedVisualScale * markerData.boundaryScale);
+      } else {
+        markerData.invalidPositionStrikes = 0;
+        markerData.hiddenByBoundary = false;
       }
     }
 
@@ -993,10 +978,10 @@ export function animateShips(
 
     // Wake
     const wake = markerData.wake;
-    wake.visible = isMoving && !isMoored;
+    wake.visible = marker.visible && isMoving && !isMoored && hasVisibleShipBody(marker);
     const wakeScaleBase = markerData.sizeScale * markerData.boundaryScale;
-    wake.scale.x = markerData.wakeWidth * wakeScaleBase * (0.58 + Math.min(sanitizedSog / 13, 1.05));
-    wake.scale.z = markerData.wakeLength * wakeScaleBase * (0.72 + Math.min(sanitizedSog / 11, 1.24));
+    wake.scale.x = markerData.wakeWidth * wakeScaleBase * (0.24 + Math.min(sanitizedSog / 34, 0.24));
+    wake.scale.z = markerData.wakeLength * wakeScaleBase * (0.2 + Math.min(sanitizedSog / 30, 0.22));
     wake.material.opacity = WAKE_BASE_OPACITY + Math.min(sanitizedSog / 55, 0.14);
   }
 }

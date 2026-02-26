@@ -346,7 +346,7 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
     }
 
     // Camera
-    const camera = new THREE.PerspectiveCamera(40, mount.clientWidth / mount.clientHeight, 1, 5000);
+    const camera = new THREE.PerspectiveCamera(40, mount.clientWidth / mount.clientHeight, 0.5, 5000);
     camera.position.set(0, WORLD_DEPTH * 0.67, -WORLD_DEPTH * 0.475);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
@@ -397,13 +397,13 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
     const controls = new MapControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.enableRotate = false;
+    controls.enableRotate = true;
     controls.screenSpacePanning = true;
     controls.zoomSpeed = 0.9;
     controls.panSpeed = 1.0;
-    controls.minDistance = 80;
+    controls.minDistance = 12;
     controls.maxDistance = worldMaxSpan * 1.85;
-    controls.maxPolarAngle = Math.PI / 2.2;
+    controls.maxPolarAngle = Math.PI / 2 - 0.04;
     controls.target.set(0, 0, 0);
     controls.update();
     controlsRef.current = controls;
@@ -597,7 +597,7 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
       if (marker) {
         const focusedShip = getShipMarkerData(marker).ship;
         controls.target.copy(marker.position);
-        camera.position.lerp(marker.position.clone().add(new THREE.Vector3(0, 203, -142)), 0.75);
+        camera.position.lerp(marker.position.clone().add(new THREE.Vector3(0, 18, -22)), 0.9);
         controls.update();
         handleShipClick(focusedShip, marker.position);
         return;
@@ -673,7 +673,7 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
         0,
         1,
       );
-      const shipZoomScale = THREE.MathUtils.lerp(0.9, 5.6, Math.pow(zoomProgress, 0.65));
+      const shipZoomScale = THREE.MathUtils.lerp(2.2, 0.95, Math.pow(zoomProgress, 0.65));
       animateShips(shipMarkers, t, shipZoomScale);
       animateAircraft(aircraftMarkersRef.current, t, shipZoomScale);
       controls.update();

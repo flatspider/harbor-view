@@ -142,6 +142,7 @@ export interface ShipMarkerData {
   sizeScale: number;
   boundaryScale: number;
   hiddenByBoundary: boolean;
+  invalidPositionStrikes: number;
   nextBoundaryCheckAt: number;
 }
 

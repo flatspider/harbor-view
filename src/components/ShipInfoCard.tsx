@@ -88,7 +88,7 @@ export function ShipInfoCard({
   };
 
   return (
-    <div ref={cardRef} style={cardStyle} className="ship-info-card" onClick={(e) => e.stopPropagation()}>
+    <div ref={cardRef} style={cardStyle} className="ship-info-card" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
       <div className="ship-info-header" style={{ borderLeftColor: CATEGORY_COLORS[category] }}>
         <span className="ship-category">{CATEGORY_LABELS[category]}</span>
         <button className="ship-info-close" onClick={handleClose}>

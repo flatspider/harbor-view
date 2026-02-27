@@ -166,6 +166,18 @@ export function getShipMarkerData(mesh: THREE.Object3D): ShipMarkerData {
   return mesh.userData as ShipMarkerData;
 }
 
+/* ── Stable Visibility ──────────────────────────────────────────────── */
+
+const visCache = new WeakMap<THREE.Object3D, boolean>();
+
+/** Only touch obj.visible when the value actually changes.
+ *  Avoids per-frame render-list churn that destabilises postprocessing. */
+export function setVisibleStable(obj: THREE.Object3D, next: boolean): void {
+  if (visCache.get(obj) === next) return;
+  obj.visible = next;
+  visCache.set(obj, next);
+}
+
 export function getShipMarkerFromObject(object: THREE.Object3D | null): ShipMesh | null {
   let current: THREE.Object3D | null = object;
   while (current) {

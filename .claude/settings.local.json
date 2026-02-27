@@ -59,7 +59,9 @@
       "mcp__playwright__browser_click",
       "mcp__playwright__browser_run_code",
       "WebFetch(domain:api.adsb.lol)",
-      "Bash(bunx tsc:*)"
+      "Bash(bunx tsc:*)",
+      "Bash(aws:*)",
+      "mcp__playwright__browser_close"
     ]
   },
   "enableAllProjectMcpServers": true,

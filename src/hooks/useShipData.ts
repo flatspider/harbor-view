@@ -38,6 +38,7 @@ export function useShipData({ enabled = true }: UseShipDataOptions = {}) {
   const [ships, setShips] = useState<Map<number, ShipData>>(new Map());
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("disconnected");
+  const [hasInitialFetchComplete, setHasInitialFetchComplete] = useState(false);
 
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined,
@@ -79,6 +80,7 @@ export function useShipData({ enabled = true }: UseShipDataOptions = {}) {
       setConnectionStatus((prev) => (prev === "error" ? prev : "error"));
     } finally {
       fetchInFlightRef.current = false;
+      setHasInitialFetchComplete((prev) => (prev ? prev : true));
     }
   }, []);
 
@@ -86,6 +88,7 @@ export function useShipData({ enabled = true }: UseShipDataOptions = {}) {
     if (!enabled) {
       setConnectionStatus("disconnected");
       setShips(new Map());
+      setHasInitialFetchComplete(false);
       return;
     }
 
@@ -102,5 +105,5 @@ export function useShipData({ enabled = true }: UseShipDataOptions = {}) {
     };
   }, [enabled, fetchShips]);
 
-  return { ships, connectionStatus, shipCount: ships.size };
+  return { ships, connectionStatus, shipCount: ships.size, hasInitialFetchComplete };
 }

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { Water } from "three/examples/jsm/objects/Water.js";
 import type { HarborEnvironment } from "../types/environment";
 import { landPolygonRings, isPointOnLand } from "./land";
-import { TILE_SIZE, WORLD_WIDTH, WORLD_DEPTH, latLonToWorld, worldToLonLat, type WaterTile } from "./constants";
+import { TILE_SIZE, WORLD_WIDTH, WORLD_DEPTH, latLonToWorld, worldToLonLat, setVisibleStable, type WaterTile } from "./constants";
 
 interface ShaderWaterTile {
   mesh: Water;
@@ -301,7 +301,7 @@ function animateCurrentArrows(env: HarborEnvironment, t: number): void {
     let speed = flow.length();
 
     if (isLandAtWorldPoint(sample.x, sample.z)) {
-      sample.helper.visible = false;
+      setVisibleStable(sample.helper, false);
       continue;
     }
 
@@ -311,7 +311,7 @@ function animateCurrentArrows(env: HarborEnvironment, t: number): void {
       speed = MIN_ARROW_SPEED;
     }
 
-    sample.helper.visible = true;
+    setVisibleStable(sample.helper, true);
     _directionScratch3.set(flow.x, 0, flow.y).normalize();
     const pulse = 0.16 * Math.sin(t * 2.1 + (sample.x - sample.z) * 0.008);
     const length = THREE.MathUtils.clamp(18 + speed * 42, 18, 46);
@@ -391,8 +391,8 @@ export function createWaterTiles(scene: THREE.Scene): WaterTile[] {
 
   // ── Water surface shader ──
   const water = new Water(geometry, {
-    textureWidth: 1024,
-    textureHeight: 1024,
+    textureWidth: 512,
+    textureHeight: 512,
     waterNormals: normalTexture,
     sunDirection: DAY_WATER_SUN_DIRECTION.clone(),
     sunColor: DAY_WATER_SUN_COLOR,
@@ -400,6 +400,7 @@ export function createWaterTiles(scene: THREE.Scene): WaterTile[] {
     distortionScale: 3.4,
     fog: scene.fog != null,
     alpha: 0.82,
+    clipBias: 0.003,
   });
 
   water.rotation.x = -Math.PI / 2;
@@ -408,8 +409,26 @@ export function createWaterTiles(scene: THREE.Scene): WaterTile[] {
   water.renderOrder = 1;
   const waterMaterial = water.material as THREE.ShaderMaterial;
   waterMaterial.depthTest = true;
-  waterMaterial.depthWrite = true;
+  waterMaterial.depthWrite = false;
   waterMaterial.transparent = true;
+
+  // Patch: the Water's onBeforeRender does a nested renderer.render() for the
+  // planar reflection. That nested render leaves the GPU depth/blend state in
+  // whatever the last mirror-scene material required. The main scene render
+  // then continues with stale state → flicker on camera angle changes.
+  // Fix: surgically restore only depth and blend state after the reflection
+  // render. A full state.reset() is too aggressive — it nukes framebuffer
+  // bindings and texture unit tracking, which kills the reflection texture.
+  const _origOnBeforeRender = water.onBeforeRender;
+  water.onBeforeRender = function (renderer, scene, camera, geometry, material, group) {
+    _origOnBeforeRender.call(this, renderer, scene, camera, geometry, material, group);
+    // Sync GPU depth/blend state AND Three.js's cache so the main scene
+    // render doesn't skip GL calls based on stale cache values.
+    renderer.state.buffers.depth.setMask(true);
+    renderer.state.buffers.depth.setTest(true);
+    renderer.state.setBlending(THREE.NoBlending);
+  };
+
   scene.add(water);
 
   const positionAttr = geometry.attributes.position as THREE.BufferAttribute;

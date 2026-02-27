@@ -18,6 +18,7 @@ import { GhibliColorShader } from "../scene/ghibliColorShader";
 import {
   WORLD_WIDTH,
   WORLD_DEPTH,
+  WORLD_UNITS_PER_METER,
   SHIP_BASE_Y,
   RENDER_LAND_POLYGONS,
   RENDER_SMOKE_SKYLINE,
@@ -34,7 +35,7 @@ import {
   animateWaterTiles,
   disposeWaterTiles,
 } from "../scene/ocean";
-import { reconcileShips, animateShips } from "../scene/ships";
+import { reconcileShips, animateShips, sanitizeShipSpeedKnots } from "../scene/ships";
 import {
   reconcileAircraft,
   animateAircraft,
@@ -129,6 +130,20 @@ const SKY_SLIDERS: SkySliderConfig[] = [
   { key: "azimuth", label: "Azimuth", min: 0, max: 360, step: 0.1, digits: 1 },
   { key: "exposure", label: "Exposure", min: 0, max: 2, step: 0.01, digits: 2 },
 ];
+
+const FASTEST_SHIP_MIN_OBSERVED_SPEED_KNOTS = 1.2;
+const FASTEST_SHIP_MIN_OBSERVED_SAMPLE_MS = 1_000;
+
+function estimateObservedTelemetrySpeedKnots(markerData: ReturnType<typeof getShipMarkerData>): number {
+  const dtMs = markerData.motion.anchorTimeMs - markerData.motion.prevAnchorTimeMs;
+  if (!Number.isFinite(dtMs) || dtMs < FASTEST_SHIP_MIN_OBSERVED_SAMPLE_MS) return 0;
+  const dx = markerData.motion.anchorPosition.x - markerData.motion.prevAnchorPosition.x;
+  const dz = markerData.motion.anchorPosition.z - markerData.motion.prevAnchorPosition.z;
+  const distanceUnits = Math.hypot(dx, dz);
+  const distanceMeters = distanceUnits / WORLD_UNITS_PER_METER;
+  const metersPerSecond = distanceMeters / (dtMs / 1000);
+  return metersPerSecond / 0.5144;
+}
 
 function createCompassLabelSprite(text: string, fontPx = 26): THREE.Sprite {
   const canvas = document.createElement("canvas");
@@ -1204,9 +1219,12 @@ export function HarborScene({
           for (const marker of shipMarkers.values()) {
             if (!marker.visible) continue;
             const markerData = getShipMarkerData(marker);
-            const sog = markerData.ship.sog;
-            if (!Number.isFinite(sog) || sog <= fastestSog) continue;
-            fastestSog = sog;
+            const reportedSog = sanitizeShipSpeedKnots(markerData.ship.sog);
+            const observedSog = estimateObservedTelemetrySpeedKnots(markerData);
+            if (observedSog < FASTEST_SHIP_MIN_OBSERVED_SPEED_KNOTS) continue;
+            const candidateSog = Math.min(reportedSog, observedSog);
+            if (!Number.isFinite(candidateSog) || candidateSog <= fastestSog) continue;
+            fastestSog = candidateSog;
             fastestMmsi = markerData.mmsi;
           }
           fastestShipMmsiRef.current = fastestSog > 0.1 ? fastestMmsi : null;

@@ -362,7 +362,7 @@ function angularDifferenceDeg(a: number, b: number): number {
   return delta;
 }
 
-function sanitizeShipSpeedKnots(rawSog: number, observedKnots?: number): number {
+export function sanitizeShipSpeedKnots(rawSog: number, observedKnots?: number): number {
   if (!Number.isFinite(rawSog) || rawSog <= 0) return 0;
   if (rawSog >= AIS_SOG_UNAVAILABLE_THRESHOLD) return 0;
 

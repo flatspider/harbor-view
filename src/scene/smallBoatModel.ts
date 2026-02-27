@@ -9,8 +9,8 @@ interface SmallBoatMetrics {
   headingRotation: number;
 }
 
-const SMALL_BOAT_MODEL_URL = "/models/small-boat-optimized.glb";
-const SMALL_BOAT_FALLBACK_MODEL_URL = "/models/Meshy_AI_Sunset_Sail_0227212429_texture.glb";
+const SMALL_BOAT_MODEL_URL = "/models/Meshy_AI_The_Red_Tugboat_0227234358_texture.glb";
+const SMALL_BOAT_FALLBACK_MODEL_URL = "/models/small-boat-optimized.glb";
 const DRACO_DECODER_PATH = "/draco/";
 const SMALL_BOAT_TARGET_LENGTH = 13;
 const SMALL_BOAT_BASE_Y = 6;

@@ -824,8 +824,8 @@ export function reconcileShips(
         side: THREE.DoubleSide,
         depthWrite: false,
         polygonOffset: true,
-        polygonOffsetFactor: -1,
-        polygonOffsetUnits: -1,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -4,
       }),
     );
     wake.position.set(0, -SHIP_BASE_Y + WAKE_WORLD_Y, -4);

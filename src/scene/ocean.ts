@@ -408,7 +408,7 @@ export function createWaterTiles(scene: THREE.Scene): WaterTile[] {
   water.renderOrder = 1;
   const waterMaterial = water.material as THREE.ShaderMaterial;
   waterMaterial.depthTest = true;
-  waterMaterial.depthWrite = true;
+  waterMaterial.depthWrite = false;
   waterMaterial.transparent = true;
   scene.add(water);
 

@@ -29,10 +29,22 @@ import {
 } from "../scene/constants";
 import { landPolygonRings, loadLandPolygons } from "../scene/land";
 import { loadSkylineSmoke } from "../scene/skyline";
-import { createWaterTiles, animateWaterTiles, disposeWaterTiles } from "../scene/ocean";
+import {
+  createWaterTiles,
+  animateWaterTiles,
+  disposeWaterTiles,
+} from "../scene/ocean";
 import { reconcileShips, animateShips } from "../scene/ships";
-import { reconcileAircraft, animateAircraft, type AircraftMarker } from "../scene/airplanes";
-import { createWindParticles, animateAtmosphere, disposeWindParticles } from "../scene/atmosphere";
+import {
+  reconcileAircraft,
+  animateAircraft,
+  type AircraftMarker,
+} from "../scene/airplanes";
+import {
+  createWindParticles,
+  animateAtmosphere,
+  disposeWindParticles,
+} from "../scene/atmosphere";
 import { HARBOR_LABELS, projectLabels } from "../scene/labels";
 import {
   createSkyBackdrop,
@@ -50,7 +62,10 @@ import {
   getFerryRouteData,
   type FerryRouteInfo,
 } from "../scene/ferryRoutes";
-import { loadShipCategoryTextures, type ShipCategoryTextureMap } from "../scene/shipTextures";
+import {
+  loadShipCategoryTextures,
+  type ShipCategoryTextureMap,
+} from "../scene/shipTextures";
 import { loadAirplanePrototype } from "../scene/airplaneModel";
 import { loadContainerShipPrototype } from "../scene/containerShipModel";
 import { loadPassengerFerryPrototype } from "../scene/passengerFerryModel";
@@ -74,11 +89,39 @@ interface SkySliderConfig {
 }
 
 const SKY_SLIDERS: SkySliderConfig[] = [
-  { key: "turbidity", label: "Turbidity", min: 0, max: 20, step: 0.1, digits: 1 },
+  {
+    key: "turbidity",
+    label: "Turbidity",
+    min: 0,
+    max: 20,
+    step: 0.1,
+    digits: 1,
+  },
   { key: "rayleigh", label: "Rayleigh", min: 0, max: 4, step: 0.01, digits: 2 },
-  { key: "mieCoefficient", label: "Mie Coef", min: 0, max: 0.1, step: 0.0001, digits: 4 },
-  { key: "mieDirectionalG", label: "Mie Dir G", min: 0, max: 1, step: 0.001, digits: 3 },
-  { key: "elevation", label: "Elevation", min: -15, max: 90, step: 0.1, digits: 1 },
+  {
+    key: "mieCoefficient",
+    label: "Mie Coef",
+    min: 0,
+    max: 0.1,
+    step: 0.0001,
+    digits: 4,
+  },
+  {
+    key: "mieDirectionalG",
+    label: "Mie Dir G",
+    min: 0,
+    max: 1,
+    step: 0.001,
+    digits: 3,
+  },
+  {
+    key: "elevation",
+    label: "Elevation",
+    min: -15,
+    max: 90,
+    step: 0.1,
+    digits: 1,
+  },
   { key: "azimuth", label: "Azimuth", min: 0, max: 360, step: 0.1, digits: 1 },
   { key: "exposure", label: "Exposure", min: 0, max: 2, step: 0.01, digits: 2 },
 ];
@@ -89,7 +132,9 @@ function createCompassLabelSprite(text: string, fontPx = 26): THREE.Sprite {
   canvas.height = 96;
   const ctx = canvas.getContext("2d");
   if (!ctx) {
-    const fallback = new THREE.Sprite(new THREE.SpriteMaterial({ color: "#ffffff" }));
+    const fallback = new THREE.Sprite(
+      new THREE.SpriteMaterial({ color: "#ffffff" }),
+    );
     fallback.scale.set(16, 6, 1);
     return fallback;
   }
@@ -126,11 +171,17 @@ function createCompassDebugGroup(): THREE.Group {
   const ringSegments = 120;
   for (let i = 0; i <= ringSegments; i += 1) {
     const a = (i / ringSegments) * Math.PI * 2;
-    ringPoints.push(new THREE.Vector3(-Math.sin(a) * radius, 0, Math.cos(a) * radius));
+    ringPoints.push(
+      new THREE.Vector3(-Math.sin(a) * radius, 0, Math.cos(a) * radius),
+    );
   }
   const ring = new THREE.LineLoop(
     new THREE.BufferGeometry().setFromPoints(ringPoints),
-    new THREE.LineBasicMaterial({ color: "#6ba7c6", transparent: true, opacity: 0.85 }),
+    new THREE.LineBasicMaterial({
+      color: "#6ba7c6",
+      transparent: true,
+      opacity: 0.85,
+    }),
   );
   ring.renderOrder = 20;
   group.add(ring);
@@ -142,13 +193,24 @@ function createCompassDebugGroup(): THREE.Group {
     const inner = radius - tickLen;
     const outer = radius + (deg % 30 === 0 ? 2 : 0);
     tickPositions.push(
-      -Math.sin(rad) * inner, 0, Math.cos(rad) * inner,
-      -Math.sin(rad) * outer, 0, Math.cos(rad) * outer,
+      -Math.sin(rad) * inner,
+      0,
+      Math.cos(rad) * inner,
+      -Math.sin(rad) * outer,
+      0,
+      Math.cos(rad) * outer,
     );
   }
   const ticks = new THREE.LineSegments(
-    new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(tickPositions, 3)),
-    new THREE.LineBasicMaterial({ color: "#8ac0db", transparent: true, opacity: 0.9 }),
+    new THREE.BufferGeometry().setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(tickPositions, 3),
+    ),
+    new THREE.LineBasicMaterial({
+      color: "#8ac0db",
+      transparent: true,
+      opacity: 0.9,
+    }),
   );
   ticks.renderOrder = 20;
   group.add(ticks);
@@ -168,11 +230,22 @@ function createCompassDebugGroup(): THREE.Group {
     { deg: 330, text: "330" },
   ];
   for (const label of headingLabels) {
-    const sprite = createCompassLabelSprite(label.text, label.deg % 90 === 0 ? 30 : 24);
+    const sprite = createCompassLabelSprite(
+      label.text,
+      label.deg % 90 === 0 ? 30 : 24,
+    );
     const rad = (label.deg * Math.PI) / 180;
     const labelRadius = radius + (label.deg % 90 === 0 ? 22 : 16);
-    sprite.position.set(-Math.sin(rad) * labelRadius, 0.5, Math.cos(rad) * labelRadius);
-    sprite.scale.set(label.deg % 90 === 0 ? 28 : 16, label.deg % 90 === 0 ? 9 : 6, 1);
+    sprite.position.set(
+      -Math.sin(rad) * labelRadius,
+      0.5,
+      Math.cos(rad) * labelRadius,
+    );
+    sprite.scale.set(
+      label.deg % 90 === 0 ? 28 : 16,
+      label.deg % 90 === 0 ? 9 : 6,
+      1,
+    );
     group.add(sprite);
   }
 
@@ -188,7 +261,11 @@ function disposeObject3D(object: THREE.Object3D): void {
       }
       return;
     }
-    if (child instanceof THREE.Line || child instanceof THREE.LineSegments || child instanceof THREE.Mesh) {
+    if (
+      child instanceof THREE.Line ||
+      child instanceof THREE.LineSegments ||
+      child instanceof THREE.Mesh
+    ) {
       child.geometry.dispose();
       if (Array.isArray(child.material)) {
         for (const material of child.material) material.dispose();
@@ -199,7 +276,12 @@ function disposeObject3D(object: THREE.Object3D): void {
   });
 }
 
-export function HarborScene({ ships, aircraft, environment, onSceneReady }: HarborSceneProps) {
+export function HarborScene({
+  ships,
+  aircraft,
+  environment,
+  onSceneReady,
+}: HarborSceneProps) {
   const sceneRef = useRef<HTMLDivElement>(null);
   const sceneInstanceRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -223,10 +305,15 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
   const aircraftMarkersRef = useRef<Map<string, AircraftMarker>>(new Map());
   const ferryRouteTargetsRef = useRef<THREE.Line[]>([]);
   const tileRef = useRef<WaterTile[]>([]);
-  const windParticlesRef = useRef<THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> | null>(null);
+  const windParticlesRef = useRef<THREE.Points<
+    THREE.BufferGeometry,
+    THREE.PointsMaterial
+  > | null>(null);
   const coastlineObjectsRef = useRef<THREE.Object3D[]>([]);
   const raycastTargetsRef = useRef<ShipMesh[]>([]);
-  const labelSizesRef = useRef(new Map<string, { width: number; height: number }>());
+  const labelSizesRef = useRef(
+    new Map<string, { width: number; height: number }>(),
+  );
   const labelElementsRef = useRef(new Map<string, HTMLDivElement>());
   const hemiLightRef = useRef<THREE.HemisphereLight | null>(null);
   const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
@@ -240,10 +327,13 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
   const airplanePrototypeRef = useRef<THREE.Object3D | null>(null);
   const sceneReadyEmittedRef = useRef(false);
   const [shipVisualAssetsRevision, setShipVisualAssetsRevision] = useState(0);
-  const [aircraftVisualAssetsRevision, setAircraftVisualAssetsRevision] = useState(0);
+  const [aircraftVisualAssetsRevision, setAircraftVisualAssetsRevision] =
+    useState(0);
   const [skyAutoMode, setSkyAutoMode] = useState(true);
   const [skyPanelOpen, setSkyPanelOpen] = useState(false);
-  const [manualSkySettings, setManualSkySettings] = useState<SkySettings>(() => getDefaultSkySettings());
+  const [manualSkySettings, setManualSkySettings] = useState<SkySettings>(() =>
+    getDefaultSkySettings(),
+  );
   const skyAutoModeRef = useRef(skyAutoMode);
   const manualSkySettingsRef = useRef(manualSkySettings);
   const [lightingPanelOpen, setLightingPanelOpen] = useState(false);
@@ -266,7 +356,9 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
     toneMapping: THREE.LinearToneMapping as number,
     shadowsEnabled: false,
   });
-  const [lightingValues, setLightingValues] = useState(() => ({ ...lightingValuesRef.current }));
+  const [lightingValues, setLightingValues] = useState(() => ({
+    ...lightingValuesRef.current,
+  }));
 
   const [selectedShip, setSelectedShip] = useState<{
     ship: ShipData;
@@ -288,14 +380,21 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
 
   const handleShipClick = useCallback(
     (ship: ShipData, worldPos: THREE.Vector3) => {
+      console.count("handleShipClick");
       const sceneRect = sceneRef.current?.getBoundingClientRect();
       const camera = cameraRef.current;
       if (!sceneRect || !camera) return;
       const projected = worldPos.clone().project(camera);
-      const x = ((projected.x + 1) * 0.5) * sceneRect.width;
-      const y = ((-projected.y + 1) * 0.5) * sceneRect.height;
+      const x = (projected.x + 1) * 0.5 * sceneRect.width;
+      const y = (-projected.y + 1) * 0.5 * sceneRect.height;
       setSelectedFerryRoute(null);
-      setSelectedShip({ ship, x, y, sceneWidth: sceneRect.width, sceneHeight: sceneRect.height });
+      setSelectedShip({
+        ship,
+        x,
+        y,
+        sceneWidth: sceneRect.width,
+        sceneHeight: sceneRect.height,
+      });
     },
     [],
   );
@@ -306,10 +405,16 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
       const camera = cameraRef.current;
       if (!sceneRect || !camera) return;
       const projected = worldPos.clone().project(camera);
-      const x = ((projected.x + 1) * 0.5) * sceneRect.width;
-      const y = ((-projected.y + 1) * 0.5) * sceneRect.height;
+      const x = (projected.x + 1) * 0.5 * sceneRect.width;
+      const y = (-projected.y + 1) * 0.5 * sceneRect.height;
       setSelectedShip(null);
-      setSelectedFerryRoute({ route, x, y, sceneWidth: sceneRect.width, sceneHeight: sceneRect.height });
+      setSelectedFerryRoute({
+        route,
+        x,
+        y,
+        sceneWidth: sceneRect.width,
+        sceneHeight: sceneRect.height,
+      });
     },
     [],
   );
@@ -339,17 +444,26 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
     lightingValuesRef.current = lightingValues;
   }, [lightingValues]);
 
-  const handleLightingChange = useCallback((key: string, value: number | string | boolean) => {
-    setLightingValues((prev) => ({ ...prev, [key]: value }));
-  }, []);
+  const handleLightingChange = useCallback(
+    (key: string, value: number | string | boolean) => {
+      setLightingValues((prev) => ({ ...prev, [key]: value }));
+    },
+    [],
+  );
 
   const handlePrintLighting = useCallback(() => {
-    console.log("[Harbor Watch] Lighting Debug Values:", JSON.stringify(lightingValuesRef.current, null, 2));
+    console.log(
+      "[Harbor Watch] Lighting Debug Values:",
+      JSON.stringify(lightingValuesRef.current, null, 2),
+    );
   }, []);
 
-  const handleSkySettingChange = useCallback((key: SkySettingKey, value: number) => {
-    setManualSkySettings((prev) => ({ ...prev, [key]: value }));
-  }, []);
+  const handleSkySettingChange = useCallback(
+    (key: SkySettingKey, value: number) => {
+      setManualSkySettings((prev) => ({ ...prev, [key]: value }));
+    },
+    [],
+  );
 
   const handleResetSkySettings = useCallback(() => {
     setManualSkySettings(getDefaultSkySettings());
@@ -385,7 +499,12 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
     if (showDebugGrid) {
       const gridSize = Math.max(WORLD_WIDTH, WORLD_DEPTH) * 1.2;
       const divisions = Math.max(24, Math.round(gridSize / 60));
-      const grid = new THREE.GridHelper(gridSize, divisions, "#31556c", "#27404f");
+      const grid = new THREE.GridHelper(
+        gridSize,
+        divisions,
+        "#31556c",
+        "#27404f",
+      );
       grid.position.y = SHIP_BASE_Y - 0.2;
       scene.add(grid);
       debugObjects.push(grid);
@@ -394,13 +513,22 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
       scene.add(axes);
       debugObjects.push(axes);
       const compass = createCompassDebugGroup();
-      compass.position.set(WORLD_WIDTH * 0.38, SHIP_BASE_Y + 0.12, -WORLD_DEPTH * 0.38);
+      compass.position.set(
+        WORLD_WIDTH * 0.38,
+        SHIP_BASE_Y + 0.12,
+        -WORLD_DEPTH * 0.38,
+      );
       scene.add(compass);
       debugObjects.push(compass);
     }
 
     // Camera
-    const camera = new THREE.PerspectiveCamera(40, mount.clientWidth / mount.clientHeight, 0.5, 5000);
+    const camera = new THREE.PerspectiveCamera(
+      40,
+      mount.clientWidth / mount.clientHeight,
+      2,
+      5000,
+    );
     camera.position.set(0, WORLD_DEPTH * 0.67, -WORLD_DEPTH * 0.475);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
@@ -412,7 +540,12 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
     renderer.toneMapping = THREE.LinearToneMapping;
     renderer.toneMappingExposure = 1.0;
     renderer.shadowMap.enabled = false;
-    renderer.autoClear = true;
+    // EffectComposer manages clearing via RenderPass — autoClear must be
+    // false so the Water shader's onBeforeRender explicitly clears its
+    // reflection target (Water.js line 329: "if autoClear === false").
+    // With autoClear=true that clear was skipped, causing state leakage
+    // from the nested reflection render into the EffectComposer pipeline.
+    renderer.autoClear = false;
     mount.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
@@ -441,6 +574,11 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
       0.4,
       0.92,
     );
+    // Widen the luminosity high-pass transition zone. The default (0.01)
+    // is razor-sharp — sub-pixel luminance shifts from camera movement
+    // cause pixels to pop in/out of bloom contribution every frame.
+    // A softer ramp (0.3) keeps bloom contribution stable under motion.
+    (bloomPass as any).highPassUniforms["smoothWidth"].value = 0.3;
     composer.addPass(bloomPass);
     bloomPassRef.current = bloomPass;
 
@@ -499,7 +637,10 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
                 visualAssetsUpdated = true;
               })
               .catch((error) => {
-                console.error("[harbor] Failed to load ship category textures", error);
+                console.error(
+                  "[harbor] Failed to load ship category textures",
+                  error,
+                );
               }),
           );
         }
@@ -513,7 +654,10 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
                 visualAssetsUpdated = true;
               })
               .catch((error) => {
-                console.error("[harbor] Failed to load passenger ferry model", error);
+                console.error(
+                  "[harbor] Failed to load passenger ferry model",
+                  error,
+                );
               }),
           );
         }
@@ -527,7 +671,10 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
                 visualAssetsUpdated = true;
               })
               .catch((error) => {
-                console.error("[harbor] Failed to load container ship model", error);
+                console.error(
+                  "[harbor] Failed to load container ship model",
+                  error,
+                );
               }),
           );
         }
@@ -584,7 +731,8 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
 
     // Resize
     const handleResize = () => {
-      if (!rendererRef.current || !cameraRef.current || !sceneRef.current) return;
+      if (!rendererRef.current || !cameraRef.current || !sceneRef.current)
+        return;
       const width = sceneRef.current.clientWidth;
       const height = sceneRef.current.clientHeight;
       if (width === 0 || height === 0) return;
@@ -598,7 +746,10 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
         composerRef.current.setSize(width, height);
       }
       if (edgePassRef.current) {
-        edgePassRef.current.uniforms.resolution.value.set(width * pixelRatio, height * pixelRatio);
+        edgePassRef.current.uniforms.resolution.value.set(
+          width * pixelRatio,
+          height * pixelRatio,
+        );
       }
     };
     const resizeObserver = new ResizeObserver(() => handleResize());
@@ -623,14 +774,17 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
       const pointerEvent = pointerMoveEventRef.current;
       if (!pointerEvent) return;
       const rect = sceneRef.current.getBoundingClientRect();
-      pointerRef.current.x = ((pointerEvent.x - rect.left) / rect.width) * 2 - 1;
-      pointerRef.current.y = -((pointerEvent.y - rect.top) / rect.height) * 2 + 1;
+      pointerRef.current.x =
+        ((pointerEvent.x - rect.left) / rect.width) * 2 - 1;
+      pointerRef.current.y =
+        -((pointerEvent.y - rect.top) / rect.height) * 2 + 1;
       raycasterRef.current.setFromCamera(pointerRef.current, cameraRef.current);
 
       raycastTargets.length = 0;
       for (const marker of shipMarkers.values()) raycastTargets.push(marker);
       const hits = raycasterRef.current.intersectObjects(raycastTargets, true);
-      const hoveredMarker = hits.length > 0 ? getShipMarkerFromObject(hits[0].object) : null;
+      const hoveredMarker =
+        hits.length > 0 ? getShipMarkerFromObject(hits[0].object) : null;
       const prevHovered = hoveredShipRef.current;
       const prevHoveredFerry = hoveredFerryRef.current;
 
@@ -645,12 +799,20 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
           hoveredFerryRef.current = null;
         }
         const hoveredData = getShipMarkerData(hoveredMarker);
-        hoverColorRef.current.copy(hoveredData.baseColor).offsetHSL(0, 0.12, 0.16);
+        hoverColorRef.current
+          .copy(hoveredData.baseColor)
+          .offsetHSL(0, 0.12, 0.16);
         hoveredMarker.material.color.copy(hoverColorRef.current);
         mount.style.cursor = "pointer";
       } else {
-        const ferryHits = raycasterRef.current.intersectObjects(ferryRouteTargets, true);
-        const hoveredFerry = ferryHits.length > 0 ? getFerryRouteFromObject(ferryHits[0].object) : null;
+        const ferryHits = raycasterRef.current.intersectObjects(
+          ferryRouteTargets,
+          true,
+        );
+        const hoveredFerry =
+          ferryHits.length > 0
+            ? getFerryRouteFromObject(ferryHits[0].object)
+            : null;
         if (prevHoveredFerry && prevHoveredFerry !== hoveredFerry) {
           const routeData = getFerryRouteData(prevHoveredFerry);
           setFerryLineColor(prevHoveredFerry, routeData.baseColor);
@@ -674,31 +836,42 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
     };
 
     const handlePointerUp = (event: PointerEvent) => {
-      if (!sceneRef.current || !cameraRef.current || !rendererRef.current) return;
+      console.count("pointerup");
+      if (!sceneRef.current || !cameraRef.current || !rendererRef.current)
+        return;
       const down = pointerDownRef.current;
       pointerDownRef.current = null;
       if (!down) return;
-      if (Math.hypot(event.clientX - down.x, event.clientY - down.y) > 6) return;
+      if (Math.hypot(event.clientX - down.x, event.clientY - down.y) > 6)
+        return;
 
       const rect = sceneRef.current.getBoundingClientRect();
       pointerRef.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      pointerRef.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      pointerRef.current.y =
+        -((event.clientY - rect.top) / rect.height) * 2 + 1;
       raycasterRef.current.setFromCamera(pointerRef.current, cameraRef.current);
 
       raycastTargets.length = 0;
       for (const marker of shipMarkers.values()) raycastTargets.push(marker);
       const hits = raycasterRef.current.intersectObjects(raycastTargets, true);
-      const marker = hits.length > 0 ? getShipMarkerFromObject(hits[0].object) : null;
+      const marker =
+        hits.length > 0 ? getShipMarkerFromObject(hits[0].object) : null;
       if (marker) {
         const focusedShip = getShipMarkerData(marker).ship;
         controls.target.copy(marker.position);
-        camera.position.lerp(marker.position.clone().add(new THREE.Vector3(0, 18, -22)), 0.9);
+        camera.position.lerp(
+          marker.position.clone().add(new THREE.Vector3(0, 18, -22)),
+          0.9,
+        );
         controls.update();
         handleShipClick(focusedShip, marker.position);
         return;
       }
 
-      const ferryHits = raycasterRef.current.intersectObjects(ferryRouteTargets, true);
+      const ferryHits = raycasterRef.current.intersectObjects(
+        ferryRouteTargets,
+        true,
+      );
       if (ferryHits.length === 0) {
         handleClose();
         return;
@@ -728,7 +901,12 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
 
     const animate = (time: number) => {
       if (frameLoopTokenRef.current !== loopToken) return;
-      if (!sceneInstanceRef.current || !cameraRef.current || !rendererRef.current) return;
+      if (
+        !sceneInstanceRef.current ||
+        !cameraRef.current ||
+        !rendererRef.current
+      )
+        return;
       const t = time * 0.001;
       const env = environmentRef.current;
 
@@ -786,7 +964,8 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
         rendererRef.current.toneMapping = lv.toneMapping as THREE.ToneMapping;
         rendererRef.current.shadowMap.enabled = lv.shadowsEnabled;
         if (colorPassRef.current) {
-          colorPassRef.current.uniforms.saturationBoost.value = lv.saturationBoost;
+          colorPassRef.current.uniforms.saturationBoost.value =
+            lv.saturationBoost;
           colorPassRef.current.uniforms.warmthShift.value = lv.warmthShift;
         }
         if (edgePassRef.current) {
@@ -794,9 +973,16 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
           edgePassRef.current.uniforms.edgeThreshold.value = lv.edgeThreshold;
         }
         if (bloomPassRef.current) {
-          bloomPassRef.current.strength = lv.bloomStrength;
-          bloomPassRef.current.radius = lv.bloomRadius;
-          bloomPassRef.current.threshold = lv.bloomThreshold;
+          // Lerp bloom parameters toward targets to prevent one-frame
+          // "white-out" flashes from sudden value jumps — UnrealBloomPass
+          // threshold changes are especially flicker-prone.
+          const bloomLerp = 0.12;
+          bloomPassRef.current.strength +=
+            (lv.bloomStrength - bloomPassRef.current.strength) * bloomLerp;
+          bloomPassRef.current.radius +=
+            (lv.bloomRadius - bloomPassRef.current.radius) * bloomLerp;
+          bloomPassRef.current.threshold +=
+            (lv.bloomThreshold - bloomPassRef.current.threshold) * bloomLerp;
         }
       }
       if (cachedNight !== appliedFerryNight) {
@@ -804,26 +990,50 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
         appliedFerryNight = cachedNight;
       }
       const zoomProgress = THREE.MathUtils.clamp(
-        (cameraDistance - controls.minDistance) / Math.max(1, controls.maxDistance - controls.minDistance),
+        (cameraDistance - controls.minDistance) /
+          Math.max(1, controls.maxDistance - controls.minDistance),
         0,
         1,
       );
-      const shipZoomScale = THREE.MathUtils.lerp(2.2, 0.95, Math.pow(zoomProgress, 0.65));
+      const shipZoomScale = THREE.MathUtils.lerp(
+        2.2,
+        0.95,
+        Math.pow(zoomProgress, 0.65),
+      );
       animateShips(shipMarkers, t, shipZoomScale);
       animateAircraft(aircraftMarkersRef.current, t, shipZoomScale);
       controls.update();
 
       if (sceneRef.current && cameraRef.current) {
-        projectLabels(cameraRef.current, sceneRef.current, labelElementsRef.current, labelSizes);
+        projectLabels(
+          cameraRef.current,
+          sceneRef.current,
+          labelElementsRef.current,
+          labelSizes,
+        );
       }
 
       if (composerRef.current) {
         composerRef.current.render();
-        // Reset WebGL state after post-processing so the bloom pass's
-        // internal state (depth mask, blend mode, etc.) doesn't leak
-        // into the next frame's RenderPass and cause flicker.
+        // The bloom pass's final blend material leaves the GPU with
+        // depthMask=false, depthTest=false, blending=Additive.
+        // renderer.state.reset() only clears Three.js's internal *cache*
+        // to defaults — it does NOT issue GL calls to actually restore
+        // the GPU state. So on the next frame, when RenderPass calls
+        // renderer.clear(), Three.js sees its cache says depthMask=true
+        // (the default) and skips the gl.depthMask(true) call. But the
+        // GPU still has depthMask=false → depth buffer never clears →
+        // stale depth values leak between frames → flicker on camera move.
+        //
+        // Fix: explicitly set the GPU back to sane defaults, THEN reset
+        // the cache so it matches reality.
+        const gl = rendererRef.current.getContext();
+        gl.depthMask(true);
+        gl.enable(gl.DEPTH_TEST);
+        gl.disable(gl.BLEND);
         rendererRef.current.state.reset();
       } else {
+        rendererRef.current.clear();
         rendererRef.current.render(sceneInstanceRef.current, cameraRef.current);
       }
       if (frameLoopTokenRef.current === loopToken) {
@@ -846,7 +1056,8 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
       pointerMoveEventRef.current = null;
       pointerDownRef.current = null;
       frameLoopTokenRef.current += 1;
-      if (animationRef.current != null) cancelAnimationFrame(animationRef.current);
+      if (animationRef.current != null)
+        cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
       mount.style.cursor = "";
       const hovered = hoveredShipRef.current;
@@ -877,7 +1088,8 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
       colorPassRef.current = null;
       bloomPassRef.current = null;
       renderer.dispose();
-      if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
+      if (mount.contains(renderer.domElement))
+        mount.removeChild(renderer.domElement);
       rendererRef.current = null;
       cameraRef.current = null;
       sceneInstanceRef.current = null;
@@ -886,9 +1098,14 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
         scene.remove(marker);
         marker.traverse((child) => {
           if (child instanceof THREE.Mesh) {
-            if ((child.userData as { sharedAircraftModelAsset?: boolean }).sharedAircraftModelAsset === true) return;
+            if (
+              (child.userData as { sharedAircraftModelAsset?: boolean })
+                .sharedAircraftModelAsset === true
+            )
+              return;
             child.geometry.dispose();
-            if (child.material instanceof THREE.Material) child.material.dispose();
+            if (child.material instanceof THREE.Material)
+              child.material.dispose();
           }
         });
       }
@@ -933,14 +1150,21 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
   useEffect(() => {
     const scene = sceneInstanceRef.current;
     if (!scene) return;
-    reconcileAircraft(scene, aircraft, aircraftMarkersRef.current, airplanePrototypeRef.current ?? undefined);
+    reconcileAircraft(
+      scene,
+      aircraft,
+      aircraftMarkersRef.current,
+      airplanePrototypeRef.current ?? undefined,
+    );
   }, [aircraft, aircraftVisualAssetsRevision]);
 
   /* ── Render ────────────────────────────────────────────────────────── */
 
   return (
     <div ref={sceneRef} className="harbor-scene">
-      {environment.activeAlerts > 0 ? <div className="harbor-alert-glow" /> : null}
+      {environment.activeAlerts > 0 ? (
+        <div className="harbor-alert-glow" />
+      ) : null}
       <div className="harbor-label-layer" aria-hidden="true">
         {HARBOR_LABELS.map((label) => (
           <div
@@ -965,17 +1189,29 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
         onPointerUp={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
       >
-        <button type="button" className="sky-controls-toggle" onClick={() => setSkyPanelOpen((open) => !open)}>
+        <button
+          type="button"
+          className="sky-controls-toggle"
+          onClick={() => setSkyPanelOpen((open) => !open)}
+        >
           {skyPanelOpen ? "Hide Sky Controls" : "Sky Controls"}
         </button>
         {skyPanelOpen && (
           <div className="sky-controls-panel">
             <div className="sky-controls-row">
               <label className="sky-controls-check">
-                <input type="checkbox" checked={skyAutoMode} onChange={(event) => setSkyAutoMode(event.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={skyAutoMode}
+                  onChange={(event) => setSkyAutoMode(event.target.checked)}
+                />
                 Auto (weather + time)
               </label>
-              <button type="button" className="sky-controls-reset" onClick={handleResetSkySettings}>
+              <button
+                type="button"
+                className="sky-controls-reset"
+                onClick={handleResetSkySettings}
+              >
                 Reset
               </button>
             </div>
@@ -991,14 +1227,22 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
                     step={slider.step}
                     value={value}
                     disabled={skyAutoMode}
-                    onChange={(event) => handleSkySettingChange(slider.key, Number(event.target.value))}
+                    onChange={(event) =>
+                      handleSkySettingChange(
+                        slider.key,
+                        Number(event.target.value),
+                      )
+                    }
                   />
                   <output>{value.toFixed(slider.digits)}</output>
                 </label>
               );
             })}
             {skyAutoMode ? (
-              <p className="sky-controls-note">Auto mode uses live weather and time-of-day values. Disable to tune manually.</p>
+              <p className="sky-controls-note">
+                Auto mode uses live weather and time-of-day values. Disable to
+                tune manually.
+              </p>
             ) : null}
           </div>
         )}
@@ -1010,34 +1254,118 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
         onPointerUp={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
       >
-        <button type="button" className="sky-controls-toggle" onClick={() => setLightingPanelOpen((open) => !open)}>
+        <button
+          type="button"
+          className="sky-controls-toggle"
+          onClick={() => setLightingPanelOpen((open) => !open)}
+        >
           {lightingPanelOpen ? "Hide Lighting" : "Lighting Debug"}
         </button>
         {lightingPanelOpen && (
           <div className="lighting-controls-panel">
             <div className="sky-controls-row">
               <label className="sky-controls-check">
-                <input type="checkbox" checked={lightingOverride} onChange={(e) => setLightingOverride(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={lightingOverride}
+                  onChange={(e) => setLightingOverride(e.target.checked)}
+                />
                 Override
               </label>
-              <button type="button" className="sky-controls-reset" onClick={handlePrintLighting}>
+              <button
+                type="button"
+                className="sky-controls-reset"
+                onClick={handlePrintLighting}
+              >
                 Print to Console
               </button>
             </div>
 
             {/* Sliders */}
-            {([
-              { key: "hemiIntensity", label: "Hemi Int", min: 0, max: 3, step: 0.01, digits: 2 },
-              { key: "sunIntensity", label: "Sun Int", min: 0, max: 3, step: 0.01, digits: 2 },
-              { key: "exposure", label: "Exposure", min: 0, max: 3, step: 0.01, digits: 2 },
-              { key: "saturationBoost", label: "Saturation", min: 0, max: 3, step: 0.01, digits: 2 },
-              { key: "warmthShift", label: "Warmth", min: -0.1, max: 0.2, step: 0.001, digits: 3 },
-              { key: "edgeStrength", label: "Edge Str", min: 0, max: 3, step: 0.01, digits: 2 },
-              { key: "edgeThreshold", label: "Edge Thr", min: 0, max: 0.5, step: 0.005, digits: 3 },
-              { key: "bloomStrength", label: "Bloom Str", min: 0, max: 2, step: 0.01, digits: 2 },
-              { key: "bloomRadius", label: "Bloom Rad", min: 0, max: 2, step: 0.01, digits: 2 },
-              { key: "bloomThreshold", label: "Bloom Thr", min: 0, max: 2, step: 0.01, digits: 2 },
-            ] as const).map((s) => (
+            {(
+              [
+                {
+                  key: "hemiIntensity",
+                  label: "Hemi Int",
+                  min: 0,
+                  max: 3,
+                  step: 0.01,
+                  digits: 2,
+                },
+                {
+                  key: "sunIntensity",
+                  label: "Sun Int",
+                  min: 0,
+                  max: 3,
+                  step: 0.01,
+                  digits: 2,
+                },
+                {
+                  key: "exposure",
+                  label: "Exposure",
+                  min: 0,
+                  max: 3,
+                  step: 0.01,
+                  digits: 2,
+                },
+                {
+                  key: "saturationBoost",
+                  label: "Saturation",
+                  min: 0,
+                  max: 3,
+                  step: 0.01,
+                  digits: 2,
+                },
+                {
+                  key: "warmthShift",
+                  label: "Warmth",
+                  min: -0.1,
+                  max: 0.2,
+                  step: 0.001,
+                  digits: 3,
+                },
+                {
+                  key: "edgeStrength",
+                  label: "Edge Str",
+                  min: 0,
+                  max: 3,
+                  step: 0.01,
+                  digits: 2,
+                },
+                {
+                  key: "edgeThreshold",
+                  label: "Edge Thr",
+                  min: 0,
+                  max: 0.5,
+                  step: 0.005,
+                  digits: 3,
+                },
+                {
+                  key: "bloomStrength",
+                  label: "Bloom Str",
+                  min: 0,
+                  max: 2,
+                  step: 0.01,
+                  digits: 2,
+                },
+                {
+                  key: "bloomRadius",
+                  label: "Bloom Rad",
+                  min: 0,
+                  max: 2,
+                  step: 0.01,
+                  digits: 2,
+                },
+                {
+                  key: "bloomThreshold",
+                  label: "Bloom Thr",
+                  min: 0,
+                  max: 2,
+                  step: 0.01,
+                  digits: 2,
+                },
+              ] as const
+            ).map((s) => (
               <label key={s.key} className="sky-control-row">
                 <span>{s.label}</span>
                 <input
@@ -1047,18 +1375,24 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
                   step={s.step}
                   value={lightingValues[s.key]}
                   disabled={!lightingOverride}
-                  onChange={(e) => handleLightingChange(s.key, Number(e.target.value))}
+                  onChange={(e) =>
+                    handleLightingChange(s.key, Number(e.target.value))
+                  }
                 />
-                <output>{(lightingValues[s.key] as number).toFixed(s.digits)}</output>
+                <output>
+                  {(lightingValues[s.key] as number).toFixed(s.digits)}
+                </output>
               </label>
             ))}
 
             {/* Color pickers */}
-            {([
-              { key: "hemiSkyColor", label: "Hemi Sky" },
-              { key: "hemiGroundColor", label: "Hemi Gnd" },
-              { key: "sunColor", label: "Sun Color" },
-            ] as const).map((c) => (
+            {(
+              [
+                { key: "hemiSkyColor", label: "Hemi Sky" },
+                { key: "hemiGroundColor", label: "Hemi Gnd" },
+                { key: "sunColor", label: "Sun Color" },
+              ] as const
+            ).map((c) => (
               <label key={c.key} className="lighting-color-row">
                 <span>{c.label}</span>
                 <input
@@ -1076,7 +1410,9 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
               <select
                 value={lightingValues.toneMapping}
                 disabled={!lightingOverride}
-                onChange={(e) => handleLightingChange("toneMapping", Number(e.target.value))}
+                onChange={(e) =>
+                  handleLightingChange("toneMapping", Number(e.target.value))
+                }
               >
                 <option value={THREE.NoToneMapping}>None</option>
                 <option value={THREE.LinearToneMapping}>Linear</option>
@@ -1091,7 +1427,9 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
                 type="checkbox"
                 checked={lightingValues.shadowsEnabled}
                 disabled={!lightingOverride}
-                onChange={(e) => handleLightingChange("shadowsEnabled", e.target.checked)}
+                onChange={(e) =>
+                  handleLightingChange("shadowsEnabled", e.target.checked)
+                }
               />
               Shadows
             </label>

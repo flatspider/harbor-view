@@ -69,7 +69,7 @@ export function FerryRouteInfoCard({
   };
 
   return (
-    <div ref={cardRef} style={cardStyle} className="ship-info-card" onClick={(e) => e.stopPropagation()}>
+    <div ref={cardRef} style={cardStyle} className="ship-info-card" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
       <div className="ship-info-header" style={{ borderLeftColor: route.routeColor }}>
         <span className="ship-category">Ferry Route</span>
         <button className="ship-info-close" onClick={handleClose}>

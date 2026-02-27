@@ -391,8 +391,8 @@ export function createWaterTiles(scene: THREE.Scene): WaterTile[] {
 
   // ── Water surface shader ──
   const water = new Water(geometry, {
-    textureWidth: 1024,
-    textureHeight: 1024,
+    textureWidth: 512,
+    textureHeight: 512,
     waterNormals: normalTexture,
     sunDirection: DAY_WATER_SUN_DIRECTION.clone(),
     sunColor: DAY_WATER_SUN_COLOR,
@@ -400,6 +400,7 @@ export function createWaterTiles(scene: THREE.Scene): WaterTile[] {
     distortionScale: 3.4,
     fog: scene.fog != null,
     alpha: 0.82,
+    clipBias: 0.003,
   });
 
   water.rotation.x = -Math.PI / 2;
@@ -410,6 +411,24 @@ export function createWaterTiles(scene: THREE.Scene): WaterTile[] {
   waterMaterial.depthTest = true;
   waterMaterial.depthWrite = false;
   waterMaterial.transparent = true;
+
+  // Patch: the Water's onBeforeRender does a nested renderer.render() for the
+  // planar reflection. That nested render leaves the GPU depth/blend state in
+  // whatever the last mirror-scene material required. The main scene render
+  // then continues with stale state → flicker on camera angle changes.
+  // Fix: surgically restore only depth and blend state after the reflection
+  // render. A full state.reset() is too aggressive — it nukes framebuffer
+  // bindings and texture unit tracking, which kills the reflection texture.
+  const _origOnBeforeRender = water.onBeforeRender;
+  water.onBeforeRender = function (renderer, scene, camera, geometry, material, group) {
+    _origOnBeforeRender.call(this, renderer, scene, camera, geometry, material, group);
+    // Sync GPU depth/blend state AND Three.js's cache so the main scene
+    // render doesn't skip GL calls based on stale cache values.
+    renderer.state.buffers.depth.setMask(true);
+    renderer.state.buffers.depth.setTest(true);
+    renderer.state.setBlending(THREE.NoBlending);
+  };
+
   scene.add(water);
 
   const positionAttr = geometry.attributes.position as THREE.BufferAttribute;

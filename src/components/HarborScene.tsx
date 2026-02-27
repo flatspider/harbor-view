@@ -529,6 +529,9 @@ export function HarborScene({
       2,
       5000,
     );
+    // The initial polar angle (from Y-axis) determines the viewing elevation.
+    // Locking this prevents camera angle changes that cause water flicker.
+    const INITIAL_POLAR_ANGLE = Math.atan2(0.475, 0.67) * 1.23; // ~10% lower (more horizontal)
     camera.position.set(0, WORLD_DEPTH * 0.67, -WORLD_DEPTH * 0.475);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
@@ -596,7 +599,10 @@ export function HarborScene({
     controls.panSpeed = 1.0;
     controls.minDistance = 12;
     controls.maxDistance = worldMaxSpan * 1.85;
-    controls.maxPolarAngle = Math.PI / 2 - 0.04;
+    // Lock the polar angle to the initial elevation — prevents the camera
+    // angle changes that cause water shader flicker.
+    controls.minPolarAngle = INITIAL_POLAR_ANGLE;
+    controls.maxPolarAngle = INITIAL_POLAR_ANGLE;
     controls.target.set(0, 0, 0);
     controls.update();
     controlsRef.current = controls;
@@ -859,8 +865,19 @@ export function HarborScene({
       if (marker) {
         const focusedShip = getShipMarkerData(marker).ship;
         controls.target.copy(marker.position);
+        // Zoom in at the locked polar angle — compute offset from the fixed
+        // elevation angle and current azimuthal angle so the camera never
+        // tilts (which would trigger water flicker).
+        const zoomDist = 30;
+        const azimuth = controls.getAzimuthalAngle();
+        const sinP = Math.sin(INITIAL_POLAR_ANGLE);
+        const cosP = Math.cos(INITIAL_POLAR_ANGLE);
         camera.position.lerp(
-          marker.position.clone().add(new THREE.Vector3(0, 18, -22)),
+          new THREE.Vector3(
+            marker.position.x + zoomDist * sinP * Math.sin(azimuth),
+            marker.position.y + zoomDist * cosP,
+            marker.position.z + zoomDist * sinP * Math.cos(azimuth),
+          ),
           0.9,
         );
         controls.update();

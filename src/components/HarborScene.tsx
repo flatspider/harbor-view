@@ -440,7 +440,6 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
       0.4,
       0.92,
     );
-    bloomPass.enabled = false; // DIAG: disable bloom to test flicker
     composer.addPass(bloomPass);
     bloomPassRef.current = bloomPass;
 
@@ -587,7 +586,6 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
       if (!rendererRef.current || !cameraRef.current || !sceneRef.current) return;
       const width = sceneRef.current.clientWidth;
       const height = sceneRef.current.clientHeight;
-      console.warn(`[diag-resize] w=${width} h=${height}`, new Error().stack?.split("\n")[2]?.trim());
       if (width === 0 || height === 0) return;
       const pixelRatio = Math.min(window.devicePixelRatio, 2);
       rendererRef.current.setPixelRatio(pixelRatio);
@@ -727,33 +725,11 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
     const loopToken = frameLoopTokenRef.current + 1;
     frameLoopTokenRef.current = loopToken;
 
-    let _diagFrameCount = 0;
-    let _diagPrevDist = 0;
     const animate = (time: number) => {
       if (frameLoopTokenRef.current !== loopToken) return;
       if (!sceneInstanceRef.current || !cameraRef.current || !rendererRef.current) return;
       const t = time * 0.001;
       const env = environmentRef.current;
-      _diagFrameCount++;
-
-      const _diagDist = cameraRef.current.position.distanceTo(controls.target);
-      const _diagJumped = Math.abs(_diagDist - _diagPrevDist) > 50;
-      // Log every frame when close (after ship click) or on big camera jumps, else every 120 frames
-      if (_diagDist < 100 || _diagJumped || _diagFrameCount % 120 === 0) {
-        const cam = cameraRef.current;
-        const childCount = sceneInstanceRef.current.children.length;
-        const visibleChildren = sceneInstanceRef.current.children.filter((c) => c.visible).length;
-        const waterVisible = tiles.filter((wt) => wt.mesh.visible).length;
-        const skyVis = skyMeshRef.current?.visible ?? "none";
-        console.log(
-          `[diag] f=${_diagFrameCount} cam=(${cam.position.x.toFixed(1)},${cam.position.y.toFixed(1)},${cam.position.z.toFixed(1)}) ` +
-          `tgt=(${controls.target.x.toFixed(1)},${controls.target.y.toFixed(1)},${controls.target.z.toFixed(1)}) ` +
-          `d=${_diagDist.toFixed(1)} vis=${visibleChildren}/${childCount} water=${waterVisible}/${tiles.length} sky=${skyVis} ` +
-          `exp=${rendererRef.current.toneMappingExposure.toFixed(3)} auto=${skyAutoModeRef.current}` +
-          (_diagJumped ? ` JUMP(${_diagPrevDist.toFixed(0)}->${_diagDist.toFixed(0)})` : ""),
-        );
-      }
-      _diagPrevDist = _diagDist;
 
       if (time >= nextNightCheck) {
         cachedNight = isNightTime();
@@ -834,6 +810,10 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
 
       if (composerRef.current) {
         composerRef.current.render();
+        // Reset WebGL state after post-processing so the bloom pass's
+        // internal state (depth mask, blend mode, etc.) doesn't leak
+        // into the next frame's RenderPass and cause flicker.
+        rendererRef.current.state.reset();
       } else {
         rendererRef.current.render(sceneInstanceRef.current, cameraRef.current);
       }

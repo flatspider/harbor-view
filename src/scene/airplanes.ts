@@ -460,8 +460,7 @@ export function animateAircraft(
     // Scale by zoom
     const sizeScale = SIZE_SCALES[data.sizeClass];
     const modelBoost = data.usesModel ? 1.65 : 1;
-    const farZoomBoost = 1 + Math.pow(Math.max(0, zoomScale - 1), 1.6) * 0.85;
-    const visualScale = sizeScale * zoomScale * 0.8 * modelBoost * farZoomBoost;
+    const visualScale = sizeScale * zoomScale * 0.8 * modelBoost;
     marker.scale.setScalar(visualScale);
   }
 }

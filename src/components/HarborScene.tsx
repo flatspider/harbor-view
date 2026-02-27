@@ -1028,11 +1028,11 @@ export function HarborScene({
         0,
         1,
       );
-      const shipZoomScale = THREE.MathUtils.lerp(
-        2.2,
-        0.95,
-        Math.pow(zoomProgress, 0.65),
-      );
+      // Base scale decreases naturally from close to mid-range
+      const baseZoomScale = THREE.MathUtils.lerp(2.2, 1.0, Math.pow(zoomProgress, 0.65));
+      // Far-distance boost kicks in past ~25% zoom-out, growing models for visibility
+      const farBoost = Math.pow(Math.max(0, zoomProgress - 0.25), 2) * 3.5;
+      const shipZoomScale = baseZoomScale + farBoost;
       animateShips(shipMarkers, t, shipZoomScale);
       animateAircraft(aircraftMarkersRef.current, t, shipZoomScale);
       controls.update();

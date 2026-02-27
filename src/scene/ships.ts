@@ -334,7 +334,7 @@ const SHIP_TARGET_DAMPING_TAU_MS = 2200;
 const SHIP_POSITION_DAMPING_TAU_MOVING_MS = 1600;
 const SHIP_POSITION_DAMPING_TAU_IDLE_MS = 2600;
 const SHIP_RENDER_LIMIT = 80;
-const SHIP_INVALID_POSITION_HIDE_STRIKES = 4;
+const SHIP_INVALID_POSITION_HIDE_STRIKES = 1;
 
 interface ResolvedShipTarget {
   target: THREE.Vector3 | null;
@@ -699,7 +699,12 @@ export function reconcileShips(
         const baseTarget = latLonToWorld(ship.lat, ship.lon);
         // Moving vessels should follow telemetry directly; collision re-packing causes visible hopping.
         if (sanitizedSog > 1.2) {
-          placementTarget = baseTarget;
+          if (isWorldPointNavigable(baseTarget.x, baseTarget.z)) {
+            placementTarget = baseTarget;
+          } else {
+            placementTarget = markerData.target;
+            markerData.hiddenByBoundary = true;
+          }
           boundaryScale = markerData.boundaryScale;
         } else {
           const collisionPlacement = resolveShipTarget(baseTarget, mmsi, radius, footprintRadius, occupiedSlots);

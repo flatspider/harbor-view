@@ -756,11 +756,14 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
           env,
           skyAutoModeRef.current ? undefined : manualSkySettingsRef.current,
         );
-        if (lightingOverrideRef.current) {
-          rendererRef.current.toneMappingExposure = lightingValuesRef.current.exposure;
-        } else {
-          rendererRef.current.toneMappingExposure = appliedSky.exposure;
-        }
+        const targetExposure = lightingOverrideRef.current
+          ? lightingValuesRef.current.exposure
+          : appliedSky.exposure;
+        rendererRef.current.toneMappingExposure = THREE.MathUtils.lerp(
+          rendererRef.current.toneMappingExposure,
+          targetExposure,
+          0.02,
+        );
       }
 
       // Apply lighting debug overrides after atmosphere has run

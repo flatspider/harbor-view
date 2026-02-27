@@ -606,6 +606,26 @@ export function HarborScene({
     controls.minPolarAngle = INITIAL_POLAR_ANGLE;
     controls.maxPolarAngle = INITIAL_POLAR_ANGLE;
     controls.target.set(0, 0, 0);
+    // Clamp pan so the camera can never see past the world edge.
+    // Bounds are zoom-dependent: at max zoom-out the viewport shows most of
+    // the world, so the target must stay near centre; at close zoom the user
+    // needs to reach any point on the map.
+    const clampPan = () => {
+      const dist = camera.position.distanceTo(controls.target);
+      const zoomT = THREE.MathUtils.clamp(
+        (dist - controls.minDistance) / (controls.maxDistance - controls.minDistance),
+        0,
+        1,
+      );
+      // At close zoom (zoomT≈0) allow full map extent; at max zoom (zoomT≈1)
+      // restrict to ~15% so the edge is never visible.
+      const limitFraction = THREE.MathUtils.lerp(0.48, 0.15, zoomT);
+      const halfX = WORLD_WIDTH * limitFraction;
+      const halfZ = WORLD_DEPTH * limitFraction;
+      controls.target.x = THREE.MathUtils.clamp(controls.target.x, -halfX, halfX);
+      controls.target.z = THREE.MathUtils.clamp(controls.target.z, -halfZ, halfZ);
+    };
+    controls.addEventListener("change", clampPan);
     controls.update();
     controlsRef.current = controls;
 
@@ -881,6 +901,7 @@ export function HarborScene({
       if (marker) {
         const focusedShip = getShipMarkerData(marker).ship;
         controls.target.copy(marker.position);
+        clampPan();
         // Zoom in at the locked polar angle — compute offset from the fixed
         // elevation angle and current azimuthal angle so the camera never
         // tilts (which would trigger water flicker).
@@ -928,6 +949,8 @@ export function HarborScene({
     let nextNightCheck = performance.now();
     let cachedNight = isNightTime();
     let appliedFerryNight = cachedNight;
+    let nextSkyUpdate = 0;
+    let cachedSkySettings: ReturnType<typeof animateSky> | null = null;
     setFerryRouteNight(appliedFerryNight);
     const loopToken = frameLoopTokenRef.current + 1;
     frameLoopTokenRef.current = loopToken;
@@ -970,20 +993,28 @@ export function HarborScene({
         lastBackgroundRef.current.copy(backgroundColorRef.current);
       }
       if (skyMeshRef.current) {
-        const appliedSky = animateSky(
-          skyMeshRef.current,
-          cachedNight,
-          env,
-          skyAutoModeRef.current ? undefined : manualSkySettingsRef.current,
-        );
+        // Throttle sky recomputation — sun angles only change once per minute,
+        // weather only changes on fetch. Rewriting uniforms every frame causes
+        // sub-pixel oscillation through the post-processing chain.
+        const manualSky = skyAutoModeRef.current ? undefined : manualSkySettingsRef.current;
+        if (time >= nextSkyUpdate || manualSky || !cachedSkySettings) {
+          cachedSkySettings = animateSky(
+            skyMeshRef.current,
+            cachedNight,
+            env,
+            manualSky,
+          );
+          if (!manualSky) nextSkyUpdate = time + 30_000;
+        }
+        const appliedSky = cachedSkySettings;
         const targetExposure = lightingOverrideRef.current
           ? lightingValuesRef.current.exposure
           : appliedSky.exposure;
-        rendererRef.current.toneMappingExposure = THREE.MathUtils.lerp(
-          rendererRef.current.toneMappingExposure,
-          targetExposure,
-          0.02,
-        );
+        const expDelta = targetExposure - rendererRef.current.toneMappingExposure;
+        rendererRef.current.toneMappingExposure =
+          Math.abs(expDelta) < 0.001
+            ? targetExposure
+            : rendererRef.current.toneMappingExposure + expDelta * 0.02;
       }
 
       // Apply lighting debug overrides after atmosphere has run
@@ -1009,13 +1040,14 @@ export function HarborScene({
           // Lerp bloom parameters toward targets to prevent one-frame
           // "white-out" flashes from sudden value jumps — UnrealBloomPass
           // threshold changes are especially flicker-prone.
+          // Snap to target when within epsilon to stop per-frame oscillation.
           const bloomLerp = 0.12;
-          bloomPassRef.current.strength +=
-            (lv.bloomStrength - bloomPassRef.current.strength) * bloomLerp;
-          bloomPassRef.current.radius +=
-            (lv.bloomRadius - bloomPassRef.current.radius) * bloomLerp;
-          bloomPassRef.current.threshold +=
-            (lv.bloomThreshold - bloomPassRef.current.threshold) * bloomLerp;
+          const bsDelta = lv.bloomStrength - bloomPassRef.current.strength;
+          bloomPassRef.current.strength = Math.abs(bsDelta) < 0.001 ? lv.bloomStrength : bloomPassRef.current.strength + bsDelta * bloomLerp;
+          const brDelta = lv.bloomRadius - bloomPassRef.current.radius;
+          bloomPassRef.current.radius = Math.abs(brDelta) < 0.001 ? lv.bloomRadius : bloomPassRef.current.radius + brDelta * bloomLerp;
+          const btDelta = lv.bloomThreshold - bloomPassRef.current.threshold;
+          bloomPassRef.current.threshold = Math.abs(btDelta) < 0.001 ? lv.bloomThreshold : bloomPassRef.current.threshold + btDelta * bloomLerp;
         }
       }
       if (cachedNight !== appliedFerryNight) {

@@ -723,13 +723,11 @@ export function reconcileShips(
         markerData.invalidPositionStrikes += 1;
         if (markerData.invalidPositionStrikes < SHIP_INVALID_POSITION_HIDE_STRIKES) {
           placementTarget = markerData.target;
-          markerData.hiddenByBoundary = false;
         } else {
           markerData.hiddenByBoundary = true;
         }
-      } else {
+      } else if (!markerData.hiddenByBoundary) {
         markerData.invalidPositionStrikes = 0;
-        markerData.hiddenByBoundary = false;
       }
       markerData.nextBoundaryCheckAt = Date.now() + SHIP_BOUNDARY_RECHECK_INTERVAL_MS;
       if (placementTarget) {
@@ -1069,9 +1067,8 @@ export function animateShips(
           setVisibleStable(markerData.wake, false);
           continue;
         }
-      } else {
+      } else if (!markerData.hiddenByBoundary) {
         markerData.invalidPositionStrikes = 0;
-        markerData.hiddenByBoundary = false;
       }
     }
 

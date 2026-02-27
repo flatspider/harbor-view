@@ -66,9 +66,10 @@ import {
   loadShipCategoryTextures,
   type ShipCategoryTextureMap,
 } from "../scene/shipTextures";
-import { loadAirplanePrototype } from "../scene/airplaneModel";
+import { loadAirplanePrototypes, type AirplanePrototypeSet } from "../scene/airplaneModel";
 import { loadContainerShipPrototype } from "../scene/containerShipModel";
 import { loadPassengerFerryPrototype } from "../scene/passengerFerryModel";
+import { loadSmallBoatPrototype } from "../scene/smallBoatModel";
 
 interface HarborSceneProps {
   ships: Map<number, ShipData>;
@@ -324,7 +325,8 @@ export function HarborScene({
   const shipCategoryTexturesRef = useRef<ShipCategoryTextureMap | null>(null);
   const passengerFerryPrototypeRef = useRef<THREE.Object3D | null>(null);
   const containerShipPrototypeRef = useRef<THREE.Object3D | null>(null);
-  const airplanePrototypeRef = useRef<THREE.Object3D | null>(null);
+  const smallBoatPrototypeRef = useRef<THREE.Object3D | null>(null);
+  const airplanePrototypesRef = useRef<AirplanePrototypeSet | null>(null);
   const sceneReadyEmittedRef = useRef(false);
   const [shipVisualAssetsRevision, setShipVisualAssetsRevision] = useState(0);
   const [aircraftVisualAssetsRevision, setAircraftVisualAssetsRevision] =
@@ -685,16 +687,30 @@ export function HarborScene({
           );
         }
 
-        if (!airplanePrototypeRef.current) {
+        if (!smallBoatPrototypeRef.current) {
           visualLoadTasks.push(
-            loadAirplanePrototype()
+            loadSmallBoatPrototype()
               .then((prototype) => {
                 if (abortController.signal.aborted) return;
-                airplanePrototypeRef.current = prototype;
+                smallBoatPrototypeRef.current = prototype;
+                visualAssetsUpdated = true;
+              })
+              .catch((error) => {
+                console.error("[harbor] Failed to load small boat model", error);
+              }),
+          );
+        }
+
+        if (!airplanePrototypesRef.current) {
+          visualLoadTasks.push(
+            loadAirplanePrototypes()
+              .then((prototypes) => {
+                if (abortController.signal.aborted) return;
+                airplanePrototypesRef.current = prototypes;
                 aircraftAssetsUpdated = true;
               })
               .catch((error) => {
-                console.error("[harbor] Failed to load airplane model", error);
+                console.error("[harbor] Failed to load airplane models", error);
               }),
           );
         }
@@ -1159,6 +1175,7 @@ export function HarborScene({
       shipCategoryTexturesRef.current ?? undefined,
       passengerFerryPrototypeRef.current ?? undefined,
       containerShipPrototypeRef.current ?? undefined,
+      smallBoatPrototypeRef.current ?? undefined,
     );
   }, [ships, shipVisualAssetsRevision]);
 
@@ -1171,7 +1188,7 @@ export function HarborScene({
       scene,
       aircraft,
       aircraftMarkersRef.current,
-      airplanePrototypeRef.current ?? undefined,
+      airplanePrototypesRef.current ?? undefined,
     );
   }, [aircraft, aircraftVisualAssetsRevision]);
 

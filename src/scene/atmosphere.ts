@@ -35,7 +35,7 @@ export function createWindParticles(scene: THREE.Scene): THREE.Points<THREE.Buff
     depthWrite: false,
   });
   const particles = new THREE.Points(geometry, material);
-  particles.renderOrder = 8;
+  particles.renderOrder = 3;
   scene.add(particles);
   return particles;
 }

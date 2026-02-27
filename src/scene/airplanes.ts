@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { AircraftData } from "../types/aircraft";
 import { getAircraftSizeClass, type AircraftSizeClass } from "../types/aircraft";
 import { createAirplaneModelInstance } from "./airplaneModel";
+import type { AirplanePrototypeSet, AirplaneVariant } from "./airplaneModel";
 import { latLonToWorld, WORLD_UNITS_PER_METER, PERF_DEBUG } from "./constants";
 import { toonGradient } from "./toonGradient";
 
@@ -21,6 +22,12 @@ const SIZE_SCALES: Record<AircraftSizeClass, number> = {
   light: 0.6,
   medium: 1.0,
   heavy: 1.5,
+};
+
+const AIRPLANE_VARIANT_WEIGHTS: Record<AirplaneVariant, number> = {
+  glider: 0.15,
+  biplane: 0.25,
+  zeppelin: 0.6,
 };
 
 /* ── Altitude Compression ──────────────────────────────────────────────── */
@@ -150,6 +157,54 @@ function createAirplaneGroup(sizeClass: AircraftSizeClass, airplanePrototype?: T
   return createProceduralAirplaneGroup(sizeClass);
 }
 
+function stableHash(input: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function pickAirplaneVariant(
+  hex: string,
+  prototypes?: AirplanePrototypeSet,
+): AirplaneVariant | undefined {
+  if (!prototypes) return undefined;
+  const available = (Object.keys(prototypes) as AirplaneVariant[]).filter(
+    (variant) => Boolean(prototypes[variant]),
+  );
+  if (available.length === 0) return undefined;
+  if (available.length === 1) return available[0];
+
+  const totalWeight = available.reduce(
+    (sum, variant) => sum + AIRPLANE_VARIANT_WEIGHTS[variant],
+    0,
+  );
+  if (totalWeight <= 0) return available[0];
+
+  const sample = (stableHash(hex) % 10_000) / 10_000;
+  let threshold = 0;
+  for (const variant of available) {
+    threshold += AIRPLANE_VARIANT_WEIGHTS[variant] / totalWeight;
+    if (sample <= threshold) return variant;
+  }
+  return available[available.length - 1];
+}
+
+function createWeightedAirplaneGroup(
+  hex: string,
+  sizeClass: AircraftSizeClass,
+  prototypes?: AirplanePrototypeSet,
+): { group: THREE.Group; modelVariant?: AirplaneVariant } {
+  const modelVariant = pickAirplaneVariant(hex, prototypes);
+  const prototype = modelVariant ? prototypes?.[modelVariant] : undefined;
+  return {
+    group: createAirplaneGroup(sizeClass, prototype),
+    modelVariant,
+  };
+}
+
 /* ── Marker Data Type ──────────────────────────────────────────────────── */
 
 export interface AircraftMarkerData {
@@ -167,6 +222,7 @@ export interface AircraftMarkerData {
   };
   sizeClass: AircraftSizeClass;
   usesModel: boolean;
+  modelVariant?: AirplaneVariant;
 }
 
 export type AircraftMarker = THREE.Group;
@@ -231,7 +287,7 @@ export function reconcileAircraft(
   scene: THREE.Scene,
   aircraftMap: Map<string, AircraftData>,
   markers: Map<string, AircraftMarker>,
-  airplanePrototype?: THREE.Object3D,
+  airplanePrototypes?: AirplanePrototypeSet,
 ): void {
   const reconcileStart = performance.now();
   let created = 0;
@@ -257,10 +313,17 @@ export function reconcileAircraft(
       data.target.copy(measuredTarget);
 
       // Rebuild geometry if size class changed
-      const usesModel = Boolean(airplanePrototype);
-      if (data.sizeClass !== sizeClass || data.usesModel !== usesModel) {
+      const selectedVariant = pickAirplaneVariant(hex, airplanePrototypes);
+      const selectedPrototype = selectedVariant ? airplanePrototypes?.[selectedVariant] : undefined;
+      const usesModel = Boolean(selectedPrototype);
+      if (
+        data.sizeClass !== sizeClass ||
+        data.usesModel !== usesModel ||
+        data.modelVariant !== selectedVariant
+      ) {
         data.sizeClass = sizeClass;
         data.usesModel = usesModel;
+        data.modelVariant = selectedVariant;
         // Remove old children and rebuild
         while (existing.children.length > 0) {
           const child = existing.children[0];
@@ -272,7 +335,7 @@ export function reconcileAircraft(
             }
           }
         }
-        const newGroup = createAirplaneGroup(sizeClass, airplanePrototype);
+        const newGroup = createAirplaneGroup(sizeClass, selectedPrototype);
         for (const child of [...newGroup.children]) {
           newGroup.remove(child);
           existing.add(child);
@@ -288,7 +351,11 @@ export function reconcileAircraft(
     const targetY = altitudeToWorldY(ac.alt_baro);
     const target = new THREE.Vector3(worldPos.x, targetY, worldPos.z);
 
-    const group = createAirplaneGroup(sizeClass, airplanePrototype);
+    const { group, modelVariant } = createWeightedAirplaneGroup(
+      hex,
+      sizeClass,
+      airplanePrototypes,
+    );
     group.position.copy(target);
     group.userData = {
       isAircraftMarker: true,
@@ -304,7 +371,8 @@ export function reconcileAircraft(
         lastAnimateTimeMs: Date.now(),
       },
       sizeClass,
-      usesModel: Boolean(airplanePrototype),
+      usesModel: Boolean(modelVariant),
+      modelVariant,
     } as AircraftMarkerData;
 
     scene.add(group);

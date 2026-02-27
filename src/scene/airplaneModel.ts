@@ -9,8 +9,25 @@ interface AirplaneMetrics {
   headingRotation: number;
 }
 
-const AIRPLANE_MODEL_URL = "/models/airplane-optimized.glb";
-const AIRPLANE_FALLBACK_MODEL_URL = "/models/Meshy_AI_Skybound_Ark_0226195620_texture.glb";
+export type AirplaneVariant = "glider" | "biplane" | "zeppelin";
+export type AirplanePrototypeSet = Partial<Record<AirplaneVariant, THREE.Object3D>>;
+
+const AIRPLANE_VARIANT_SOURCES: Record<AirplaneVariant, string[]> = {
+  glider: [
+    "/models/glider-optimized.glb",
+    "/models/Meshy_AI_Blue_Winged_Sky_Racer_0227211314_texture.glb",
+  ],
+  biplane: [
+    "/models/biplane-optimized.glb",
+    "/models/Meshy_AI_Golden_Biplane_0227212937_texture.glb",
+    "/models/Meshy_AI_Backyard_Aviator_0227203010_texture.glb",
+  ],
+  zeppelin: [
+    "/models/zeppelin-optimized.glb",
+    "/models/airplane-optimized.glb",
+    "/models/Meshy_AI_Skybound_Ark_0226195620_texture.glb",
+  ],
+};
 const DRACO_DECODER_PATH = "/draco/";
 const AIRPLANE_MODEL_NAME = "aircraft-model";
 const AIRPLANE_METRICS_KEY = "__airplaneMetrics";
@@ -22,7 +39,7 @@ const TARGET_LENGTH_BY_SIZE: Record<AircraftSizeClass, number> = {
   heavy: 19,
 };
 
-let airplaneLoadPromise: Promise<THREE.Object3D> | null = null;
+let airplaneLoadPromise: Promise<AirplanePrototypeSet> | null = null;
 
 function normalizePrototype(prototype: THREE.Object3D): AirplaneMetrics {
   prototype.updateMatrixWorld(true);
@@ -106,19 +123,45 @@ function loadModel(url: string, useDraco: boolean): Promise<THREE.Object3D> {
   });
 }
 
-export function loadAirplanePrototype(): Promise<THREE.Object3D> {
+async function loadFirstAvailableModel(urls: string[]): Promise<THREE.Object3D> {
+  let lastError: unknown = null;
+  for (const url of urls) {
+    const prefersDraco = url.endsWith("-optimized.glb");
+    try {
+      return await loadModel(url, prefersDraco);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError ?? new Error("No airplane model URL could be loaded");
+}
+
+export function loadAirplanePrototypes(): Promise<AirplanePrototypeSet> {
   if (airplaneLoadPromise) return airplaneLoadPromise;
 
   airplaneLoadPromise = (async () => {
-    try {
-      const optimizedPrototype = await loadModel(AIRPLANE_MODEL_URL, true);
-      normalizePrototype(optimizedPrototype);
-      return optimizedPrototype;
-    } catch {
-      const fallbackPrototype = await loadModel(AIRPLANE_FALLBACK_MODEL_URL, false);
-      normalizePrototype(fallbackPrototype);
-      return fallbackPrototype;
+    const entries = await Promise.allSettled(
+      (Object.keys(AIRPLANE_VARIANT_SOURCES) as AirplaneVariant[]).map(async (variant) => {
+        const prototype = await loadFirstAvailableModel(AIRPLANE_VARIANT_SOURCES[variant]);
+        normalizePrototype(prototype);
+        return [variant, prototype] as const;
+      }),
+    );
+
+    const loaded = Object.fromEntries(
+      entries
+        .filter(
+          (entry): entry is PromiseFulfilledResult<readonly [AirplaneVariant, THREE.Object3D]> =>
+            entry.status === "fulfilled",
+        )
+        .map((entry) => entry.value),
+    ) as AirplanePrototypeSet;
+
+    if (!loaded.glider && !loaded.biplane && !loaded.zeppelin) {
+      throw new Error("Failed to load any aircraft model variants");
     }
+
+    return loaded;
   })().catch((error) => {
     airplaneLoadPromise = null;
     throw error;

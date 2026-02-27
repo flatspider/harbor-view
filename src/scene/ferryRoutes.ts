@@ -166,7 +166,7 @@ export async function loadFerryRoutes(scene: THREE.Scene, signal: AbortSignal): 
           };
           line.userData = routeData;
           line.computeLineDistances();
-          line.renderOrder = 11;
+          line.renderOrder = 2;
           scene.add(line);
           ferryObjects.push(line);
         }

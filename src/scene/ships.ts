@@ -24,6 +24,7 @@ import {
 import { createContainerShipModelInstance } from "./containerShipModel";
 import { isPointOnLand } from "./land";
 import { createPassengerFerryModelInstance } from "./passengerFerryModel";
+import { createSmallBoatModelInstance } from "./smallBoatModel";
 import { toonGradient } from "./toonGradient";
 
 /* ── Geometry Factories ──────────────────────────────────────────────── */
@@ -151,8 +152,10 @@ function getShipModelPrototype(
   category: ShipCategory,
   passengerFerryPrototype?: THREE.Object3D,
   containerShipPrototype?: THREE.Object3D,
+  smallBoatPrototype?: THREE.Object3D,
 ): THREE.Object3D | undefined {
   if (category === "cargo") return containerShipPrototype;
+  if (category === "other") return smallBoatPrototype;
   return passengerFerryPrototype;
 }
 
@@ -160,16 +163,30 @@ function shouldUseShipModel(
   category: ShipCategory,
   passengerFerryPrototype?: THREE.Object3D,
   containerShipPrototype?: THREE.Object3D,
+  smallBoatPrototype?: THREE.Object3D,
 ): boolean {
-  return Boolean(getShipModelPrototype(category, passengerFerryPrototype, containerShipPrototype));
+  return Boolean(
+    getShipModelPrototype(
+      category,
+      passengerFerryPrototype,
+      containerShipPrototype,
+      smallBoatPrototype,
+    ),
+  );
 }
 
 function shouldRenderShipDetail(
   category: ShipCategory,
   passengerFerryPrototype?: THREE.Object3D,
   containerShipPrototype?: THREE.Object3D,
+  smallBoatPrototype?: THREE.Object3D,
 ): boolean {
-  return !shouldUseShipModel(category, passengerFerryPrototype, containerShipPrototype);
+  return !shouldUseShipModel(
+    category,
+    passengerFerryPrototype,
+    containerShipPrototype,
+    smallBoatPrototype,
+  );
 }
 
 function isSharedPassengerFerryAsset(object: THREE.Object3D): boolean {
@@ -192,9 +209,13 @@ function createShipCategoryVisual(
   categoryTextures: Record<ShipCategory, THREE.Texture> | undefined,
   passengerFerryPrototype?: THREE.Object3D,
   containerShipPrototype?: THREE.Object3D,
+  smallBoatPrototype?: THREE.Object3D,
 ): THREE.Object3D | null {
   if (category === "cargo" && containerShipPrototype) {
     return createContainerShipModelInstance(containerShipPrototype, sizeScale);
+  }
+  if (category === "other" && smallBoatPrototype) {
+    return createSmallBoatModelInstance(smallBoatPrototype, sizeScale);
   }
   if (passengerFerryPrototype) {
     return createPassengerFerryModelInstance(passengerFerryPrototype, sizeScale);
@@ -218,9 +239,15 @@ function needsShipCategoryVisualRefresh(
   categoryTextures: Record<ShipCategory, THREE.Texture> | undefined,
   passengerFerryPrototype?: THREE.Object3D,
   containerShipPrototype?: THREE.Object3D,
+  smallBoatPrototype?: THREE.Object3D,
 ): boolean {
   const visual = getShipCategoryVisual(parent);
-  const wantsModel = shouldUseShipModel(category, passengerFerryPrototype, containerShipPrototype);
+  const wantsModel = shouldUseShipModel(
+    category,
+    passengerFerryPrototype,
+    containerShipPrototype,
+    smallBoatPrototype,
+  );
   if (wantsModel) {
     return visual?.name !== SHIP_CATEGORY_MODEL_NAME;
   }
@@ -235,9 +262,15 @@ function syncShipDetailMesh(
   hullColor: THREE.Color,
   passengerFerryPrototype?: THREE.Object3D,
   containerShipPrototype?: THREE.Object3D,
+  smallBoatPrototype?: THREE.Object3D,
 ): void {
   const existingDetail = parent.children.find((child) => child.name === SHIP_DETAIL_NAME);
-  const wantsDetail = shouldRenderShipDetail(category, passengerFerryPrototype, containerShipPrototype);
+  const wantsDetail = shouldRenderShipDetail(
+    category,
+    passengerFerryPrototype,
+    containerShipPrototype,
+    smallBoatPrototype,
+  );
 
   if (!wantsDetail) {
     if (existingDetail instanceof THREE.Mesh) {
@@ -599,6 +632,7 @@ export function reconcileShips(
   categoryTextures?: Record<ShipCategory, THREE.Texture>,
   passengerFerryPrototype?: THREE.Object3D,
   containerShipPrototype?: THREE.Object3D,
+  smallBoatPrototype?: THREE.Object3D,
 ): void {
   const shipsEffectStart = performance.now();
   let skippedNoPosition = 0;
@@ -724,9 +758,15 @@ export function reconcileShips(
           categoryTextures,
           passengerFerryPrototype,
           containerShipPrototype,
+          smallBoatPrototype,
         );
       const hasDetailMesh = existing.children.some((child) => child.name === SHIP_DETAIL_NAME);
-      const wantsDetailMesh = shouldRenderShipDetail(category, passengerFerryPrototype, containerShipPrototype);
+      const wantsDetailMesh = shouldRenderShipDetail(
+        category,
+        passengerFerryPrototype,
+        containerShipPrototype,
+        smallBoatPrototype,
+      );
       const needsDetailRefresh = needsGeometryRefresh || hasDetailMesh !== wantsDetailMesh;
 
       if (needsGeometryRefresh) {
@@ -744,13 +784,26 @@ export function reconcileShips(
       const nextColor = new THREE.Color(style.color);
       markerData.baseColor.copy(nextColor);
       existing.material.color.copy(nextColor);
-      const rendersAsModel = shouldUseShipModel(category, passengerFerryPrototype, containerShipPrototype);
+      const rendersAsModel = shouldUseShipModel(
+        category,
+        passengerFerryPrototype,
+        containerShipPrototype,
+        smallBoatPrototype,
+      );
       existing.material.opacity = rendersAsModel ? 0 : 1;
       markerData.wakeWidth = style.wakeWidth;
       markerData.wakeLength = style.wakeLength;
 
       if (needsDetailRefresh) {
-        syncShipDetailMesh(existing, category, nextSizeScale, nextColor, passengerFerryPrototype, containerShipPrototype);
+        syncShipDetailMesh(
+          existing,
+          category,
+          nextSizeScale,
+          nextColor,
+          passengerFerryPrototype,
+          containerShipPrototype,
+          smallBoatPrototype,
+        );
       }
       if (needsVisualRefresh) {
         removeShipCategoryVisual(existing);
@@ -760,6 +813,7 @@ export function reconcileShips(
           categoryTextures,
           passengerFerryPrototype,
           containerShipPrototype,
+          smallBoatPrototype,
         );
         if (nextVisual) existing.add(nextVisual);
       }
@@ -807,7 +861,14 @@ export function reconcileShips(
       color: hullColor,
       gradientMap: toonGradient,
       transparent: true,
-      opacity: shouldUseShipModel(category, passengerFerryPrototype, containerShipPrototype) ? 0 : 1,
+      opacity: shouldUseShipModel(
+        category,
+        passengerFerryPrototype,
+        containerShipPrototype,
+        smallBoatPrototype,
+      )
+        ? 0
+        : 1,
     });
     const hull = new THREE.Mesh(hullGeometry, hullMaterial) as ShipMesh;
     hull.castShadow = false;
@@ -833,7 +894,15 @@ export function reconcileShips(
     wake.renderOrder = 4;
     hull.add(wake);
 
-    syncShipDetailMesh(hull, category, nextSizeScale, hullColor, passengerFerryPrototype, containerShipPrototype);
+    syncShipDetailMesh(
+      hull,
+      category,
+      nextSizeScale,
+      hullColor,
+      passengerFerryPrototype,
+      containerShipPrototype,
+      smallBoatPrototype,
+    );
 
     const categoryVisual = createShipCategoryVisual(
       category,
@@ -841,6 +910,7 @@ export function reconcileShips(
       categoryTextures,
       passengerFerryPrototype,
       containerShipPrototype,
+      smallBoatPrototype,
     );
     if (categoryVisual) {
       hull.add(categoryVisual);

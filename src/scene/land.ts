@@ -121,6 +121,7 @@ function addGeoJsonLand(scene: THREE.Scene, data: GeoJsonFeatureCollection): boo
       mesh.position.y = LAND_SURFACE_Y - LAND_BASE_HEIGHT;
       mesh.receiveShadow = true;
       mesh.castShadow = true;
+      mesh.renderOrder = 1;
       scene.add(mesh);
 
       const edge = new THREE.LineSegments(
@@ -129,6 +130,7 @@ function addGeoJsonLand(scene: THREE.Scene, data: GeoJsonFeatureCollection): boo
       );
       edge.rotation.copy(mesh.rotation);
       edge.position.copy(mesh.position);
+      edge.renderOrder = 1;
       scene.add(edge);
     } else {
       // Fallback: single material
@@ -137,6 +139,7 @@ function addGeoJsonLand(scene: THREE.Scene, data: GeoJsonFeatureCollection): boo
       mesh.position.y = LAND_SURFACE_Y - LAND_BASE_HEIGHT;
       mesh.receiveShadow = true;
       mesh.castShadow = true;
+      mesh.renderOrder = 1;
       scene.add(mesh);
 
       const edge = new THREE.LineSegments(
@@ -145,6 +148,7 @@ function addGeoJsonLand(scene: THREE.Scene, data: GeoJsonFeatureCollection): boo
       );
       edge.rotation.copy(mesh.rotation);
       edge.position.copy(mesh.position);
+      edge.renderOrder = 1;
       scene.add(edge);
     }
     added = true;

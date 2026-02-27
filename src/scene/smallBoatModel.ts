@@ -3,50 +3,46 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { convertToToonMaterial } from "./convertToToon";
 
-interface ContainerShipMetrics {
+interface SmallBoatMetrics {
   length: number;
   height: number;
   headingRotation: number;
 }
 
-const CONTAINER_SHIP_MODEL_URL = "/models/container-ship-optimized.glb";
-const CONTAINER_SHIP_FALLBACK_MODEL_URL = "/models/Meshy_AI_Colorful_Container_Sh_0226194049_texture.glb";
+const SMALL_BOAT_MODEL_URL = "/models/small-boat-optimized.glb";
+const SMALL_BOAT_FALLBACK_MODEL_URL = "/models/Meshy_AI_Sunset_Sail_0227212429_texture.glb";
 const DRACO_DECODER_PATH = "/draco/";
-const CONTAINER_SHIP_TARGET_LENGTH = 25;
-const CONTAINER_SHIP_BASE_Y = 1;
-const CONTAINER_SHIP_SINK_RATIO = 0.34;
-const CONTAINER_SHIP_MODEL_NAME = "ship-category-model";
-const CONTAINER_SHIP_METRICS_KEY = "__containerShipMetrics";
-const CONTAINER_SHIP_SHARED_ASSET_KEY = "sharedShipModelAsset";
-const CONTAINER_SHIP_STYLED_MATERIAL_KEY = "__containerShipStyledMaterial";
+const SMALL_BOAT_TARGET_LENGTH = 13;
+const SMALL_BOAT_BASE_Y = 1;
+const SMALL_BOAT_SINK_RATIO = 0.34;
+const SMALL_BOAT_MODEL_NAME = "ship-category-model";
+const SMALL_BOAT_METRICS_KEY = "__smallBoatMetrics";
+const SMALL_BOAT_SHARED_ASSET_KEY = "sharedShipModelAsset";
+const SMALL_BOAT_STYLED_MATERIAL_KEY = "__smallBoatStyledMaterial";
 
 const _hsl = { h: 0, s: 0, l: 0 };
 
-let containerShipLoadPromise: Promise<THREE.Object3D> | null = null;
+let smallBoatLoadPromise: Promise<THREE.Object3D> | null = null;
 
-function applyToonContainerShipMaterial(mesh: THREE.Mesh): void {
+function applyToonSmallBoatMaterial(mesh: THREE.Mesh): void {
   const swap = (source: THREE.Material): THREE.MeshToonMaterial => {
-    if ((source.userData as Record<string, unknown>)[CONTAINER_SHIP_STYLED_MATERIAL_KEY]) {
+    if ((source.userData as Record<string, unknown>)[SMALL_BOAT_STYLED_MATERIAL_KEY]) {
       return source as unknown as THREE.MeshToonMaterial;
     }
 
     const toon = convertToToonMaterial(source);
-
-    // Brighten / saturate the toon color
     toon.color.getHSL(_hsl);
     toon.color.setHSL(
       _hsl.h,
-      Math.min(1, _hsl.s * 1.2 + 0.05),
-      Math.min(0.72, _hsl.l * 1.22 + 0.06),
+      Math.min(1, _hsl.s * 1.08 + 0.03),
+      Math.min(0.72, _hsl.l * 1.12 + 0.04),
     );
     toon.emissive.copy(toon.color);
-    toon.emissiveIntensity = 0.15;
+    toon.emissiveIntensity = 0.14;
     toon.needsUpdate = true;
-
-    toon.userData[CONTAINER_SHIP_STYLED_MATERIAL_KEY] = true;
+    toon.userData[SMALL_BOAT_STYLED_MATERIAL_KEY] = true;
 
     if (source !== toon) source.dispose();
-
     return toon;
   };
 
@@ -57,7 +53,7 @@ function applyToonContainerShipMaterial(mesh: THREE.Mesh): void {
   }
 }
 
-function normalizePrototype(prototype: THREE.Object3D): ContainerShipMetrics {
+function normalizePrototype(prototype: THREE.Object3D): SmallBoatMetrics {
   prototype.updateMatrixWorld(true);
 
   const bounds = new THREE.Box3().setFromObject(prototype);
@@ -72,27 +68,27 @@ function normalizePrototype(prototype: THREE.Object3D): ContainerShipMetrics {
   const planarLength = Math.max(size.x, size.z, 0.001);
   const headingRotation = size.x >= size.z ? Math.PI / 2 : 0;
 
-  const metrics: ContainerShipMetrics = {
+  const metrics: SmallBoatMetrics = {
     length: planarLength,
     height: Math.max(size.y, 0.001),
     headingRotation,
   };
-  prototype.userData[CONTAINER_SHIP_METRICS_KEY] = metrics;
+  prototype.userData[SMALL_BOAT_METRICS_KEY] = metrics;
 
   prototype.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
     child.castShadow = false;
     child.receiveShadow = false;
     child.renderOrder = 6;
-    child.userData[CONTAINER_SHIP_SHARED_ASSET_KEY] = true;
-    applyToonContainerShipMaterial(child);
+    child.userData[SMALL_BOAT_SHARED_ASSET_KEY] = true;
+    applyToonSmallBoatMaterial(child);
   });
 
   return metrics;
 }
 
-function getMetrics(prototype: THREE.Object3D): ContainerShipMetrics {
-  const stored = prototype.userData[CONTAINER_SHIP_METRICS_KEY] as Partial<ContainerShipMetrics> | undefined;
+function getMetrics(prototype: THREE.Object3D): SmallBoatMetrics {
+  const stored = prototype.userData[SMALL_BOAT_METRICS_KEY] as Partial<SmallBoatMetrics> | undefined;
   if (
     stored &&
     typeof stored.length === "number" &&
@@ -122,7 +118,7 @@ function loadModel(url: string, useDraco: boolean): Promise<THREE.Object3D> {
       (gltf) => {
         dracoLoader?.dispose();
         if (!gltf.scene) {
-          reject(new Error(`Container ship model has no scene: ${url}`));
+          reject(new Error(`Small boat model has no scene: ${url}`));
           return;
         }
         resolve(gltf.scene);
@@ -136,49 +132,49 @@ function loadModel(url: string, useDraco: boolean): Promise<THREE.Object3D> {
   });
 }
 
-export function loadContainerShipPrototype(): Promise<THREE.Object3D> {
-  if (containerShipLoadPromise) return containerShipLoadPromise;
+export function loadSmallBoatPrototype(): Promise<THREE.Object3D> {
+  if (smallBoatLoadPromise) return smallBoatLoadPromise;
 
-  containerShipLoadPromise = (async () => {
+  smallBoatLoadPromise = (async () => {
     try {
-      const optimizedPrototype = await loadModel(CONTAINER_SHIP_MODEL_URL, true);
+      const optimizedPrototype = await loadModel(SMALL_BOAT_MODEL_URL, true);
       normalizePrototype(optimizedPrototype);
       return optimizedPrototype;
     } catch {
-      const fallbackPrototype = await loadModel(CONTAINER_SHIP_FALLBACK_MODEL_URL, false);
+      const fallbackPrototype = await loadModel(SMALL_BOAT_FALLBACK_MODEL_URL, false);
       normalizePrototype(fallbackPrototype);
       return fallbackPrototype;
     }
   })().catch((error) => {
-    containerShipLoadPromise = null;
+    smallBoatLoadPromise = null;
     throw error;
   });
 
-  return containerShipLoadPromise;
+  return smallBoatLoadPromise;
 }
 
-export function createContainerShipModelInstance(
+export function createSmallBoatModelInstance(
   prototype: THREE.Object3D,
   sizeScale: number,
 ): THREE.Object3D {
   const metrics = getMetrics(prototype);
   const visualScale = Math.max(sizeScale, 0.22);
-  const targetLength = CONTAINER_SHIP_TARGET_LENGTH * visualScale;
+  const targetLength = SMALL_BOAT_TARGET_LENGTH * visualScale;
   const modelScale = targetLength / Math.max(metrics.length, 0.001);
   const modelHeight = metrics.height * modelScale;
-  const sinkOffset = modelHeight * CONTAINER_SHIP_SINK_RATIO;
+  const sinkOffset = modelHeight * SMALL_BOAT_SINK_RATIO;
 
   const instance = prototype.clone(true);
-  instance.name = CONTAINER_SHIP_MODEL_NAME;
+  instance.name = SMALL_BOAT_MODEL_NAME;
   instance.renderOrder = 6;
   instance.scale.setScalar(modelScale);
   instance.rotation.y = metrics.headingRotation;
-  instance.position.set(0, CONTAINER_SHIP_BASE_Y * visualScale - sinkOffset, 0);
+  instance.position.set(0, SMALL_BOAT_BASE_Y * visualScale - sinkOffset, 0);
 
   instance.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
     child.renderOrder = 6;
-    child.userData[CONTAINER_SHIP_SHARED_ASSET_KEY] = true;
+    child.userData[SMALL_BOAT_SHARED_ASSET_KEY] = true;
   });
 
   return instance;

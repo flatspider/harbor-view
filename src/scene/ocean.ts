@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { Water } from "three/examples/jsm/objects/Water.js";
 import type { HarborEnvironment } from "../types/environment";
 import { landPolygonRings, isPointOnLand } from "./land";
-import { TILE_SIZE, WORLD_WIDTH, WORLD_DEPTH, latLonToWorld, worldToLonLat, type WaterTile } from "./constants";
+import { TILE_SIZE, WORLD_WIDTH, WORLD_DEPTH, latLonToWorld, worldToLonLat, setVisibleStable, type WaterTile } from "./constants";
 
 interface ShaderWaterTile {
   mesh: Water;
@@ -301,7 +301,7 @@ function animateCurrentArrows(env: HarborEnvironment, t: number): void {
     let speed = flow.length();
 
     if (isLandAtWorldPoint(sample.x, sample.z)) {
-      sample.helper.visible = false;
+      setVisibleStable(sample.helper, false);
       continue;
     }
 
@@ -311,7 +311,7 @@ function animateCurrentArrows(env: HarborEnvironment, t: number): void {
       speed = MIN_ARROW_SPEED;
     }
 
-    sample.helper.visible = true;
+    setVisibleStable(sample.helper, true);
     _directionScratch3.set(flow.x, 0, flow.y).normalize();
     const pulse = 0.16 * Math.sin(t * 2.1 + (sample.x - sample.z) * 0.008);
     const length = THREE.MathUtils.clamp(18 + speed * 42, 18, 46);

@@ -231,6 +231,7 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
   const hemiLightRef = useRef<THREE.HemisphereLight | null>(null);
   const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
   const backgroundColorRef = useRef(new THREE.Color());
+  const lastBackgroundRef = useRef(new THREE.Color());
   const skyMeshRef = useRef<THREE.Mesh | null>(null);
   const environmentRef = useRef(environment);
   const shipCategoryTexturesRef = useRef<ShipCategoryTextureMap | null>(null);
@@ -748,7 +749,15 @@ export function HarborScene({ ships, aircraft, environment, onSceneReady }: Harb
         cachedNight,
         cameraDistance,
       );
-      sceneInstanceRef.current.background = backgroundColorRef.current;
+      // Only mutate scene.background when the color actually changed —
+      // reassigning the setter every frame triggers internal Three.js state
+      // invalidation that causes visible flicker with postprocessing.
+      if (!lastBackgroundRef.current.equals(backgroundColorRef.current)) {
+        (sceneInstanceRef.current.background as THREE.Color).copy(
+          backgroundColorRef.current,
+        );
+        lastBackgroundRef.current.copy(backgroundColorRef.current);
+      }
       if (skyMeshRef.current) {
         const appliedSky = animateSky(
           skyMeshRef.current,

@@ -15,6 +15,7 @@ import {
   latLonToWorld,
   worldToLonLat,
   getShipMarkerData,
+  setVisibleStable,
   type ShipCategoryStyle,
   type ShipMarkerData,
   type ShipMesh,
@@ -775,11 +776,11 @@ export function reconcileShips(
       }
 
       if (markerData.hiddenByBoundary) {
-        existing.visible = false;
-        markerData.wake.visible = false;
+        setVisibleStable(existing, false);
+        setVisibleStable(markerData.wake, false);
         hiddenByBoundary += 1;
       } else if (placementTarget) {
-        existing.visible = true;
+        setVisibleStable(existing, true);
         occupiedSlots.push({ mmsi, radius, x: placementTarget.x, z: placementTarget.z });
       }
 
@@ -943,11 +944,11 @@ export function animateShips(
   for (const marker of shipMarkers.values()) {
     const markerData = getShipMarkerData(marker);
     if (markerData.hiddenByBoundary) {
-      marker.visible = false;
-      markerData.wake.visible = false;
+      setVisibleStable(marker, false);
+      setVisibleStable(markerData.wake, false);
       continue;
     }
-    marker.visible = true;
+    setVisibleStable(marker, true);
 
     const ship = markerData.ship;
     const sanitizedSog = sanitizeShipSpeedKnots(ship.sog);
@@ -989,8 +990,8 @@ export function animateShips(
         markerData.invalidPositionStrikes += 1;
         if (markerData.invalidPositionStrikes >= SHIP_INVALID_POSITION_HIDE_STRIKES) {
           markerData.hiddenByBoundary = true;
-          marker.visible = false;
-          markerData.wake.visible = false;
+          setVisibleStable(marker, false);
+          setVisibleStable(markerData.wake, false);
           continue;
         }
       } else {
@@ -1018,7 +1019,7 @@ export function animateShips(
 
     // Wake
     const wake = markerData.wake;
-    wake.visible = marker.visible && isMoving && !isMoored && hasVisibleShipBody(marker);
+    setVisibleStable(wake, marker.visible && isMoving && !isMoored && hasVisibleShipBody(marker));
     const wakeScaleBase = markerData.sizeScale * markerData.boundaryScale;
     wake.scale.x = markerData.wakeWidth * wakeScaleBase * (0.24 + Math.min(sanitizedSog / 34, 0.24));
     wake.scale.z = markerData.wakeLength * wakeScaleBase * (0.2 + Math.min(sanitizedSog / 30, 0.22));

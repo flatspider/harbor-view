@@ -26,6 +26,7 @@ function hasAircraftChanged(prev: AircraftData, next: AircraftData): boolean {
 
 export function useAircraftData({ enabled = true }: UseAircraftDataOptions = {}) {
   const [aircraft, setAircraft] = useState<Map<string, AircraftData>>(new Map());
+  const [hasInitialFetchComplete, setHasInitialFetchComplete] = useState(false);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined,
   );
@@ -64,12 +65,14 @@ export function useAircraftData({ enabled = true }: UseAircraftDataOptions = {})
       // Silently degrade — aircraft layer is non-critical
     } finally {
       fetchInFlightRef.current = false;
+      setHasInitialFetchComplete((prev) => (prev ? prev : true));
     }
   }, []);
 
   useEffect(() => {
     if (!enabled) {
       setAircraft(new Map());
+      setHasInitialFetchComplete(false);
       return;
     }
 
@@ -85,5 +88,5 @@ export function useAircraftData({ enabled = true }: UseAircraftDataOptions = {})
     };
   }, [enabled, fetchAircraft]);
 
-  return { aircraft, aircraftCount: aircraft.size };
+  return { aircraft, aircraftCount: aircraft.size, hasInitialFetchComplete };
 }

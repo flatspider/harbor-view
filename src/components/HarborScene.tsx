@@ -59,6 +59,7 @@ interface HarborSceneProps {
   ships: Map<number, ShipData>;
   aircraft: Map<string, AircraftData>;
   environment: HarborEnvironment;
+  onSceneReady?: () => void;
 }
 
 type SkySettingKey = keyof SkySettings;
@@ -198,7 +199,7 @@ function disposeObject3D(object: THREE.Object3D): void {
   });
 }
 
-export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) {
+export function HarborScene({ ships, aircraft, environment, onSceneReady }: HarborSceneProps) {
   const sceneRef = useRef<HTMLDivElement>(null);
   const sceneInstanceRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -236,6 +237,7 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
   const passengerFerryPrototypeRef = useRef<THREE.Object3D | null>(null);
   const containerShipPrototypeRef = useRef<THREE.Object3D | null>(null);
   const airplanePrototypeRef = useRef<THREE.Object3D | null>(null);
+  const sceneReadyEmittedRef = useRef(false);
   const [shipVisualAssetsRevision, setShipVisualAssetsRevision] = useState(0);
   const [aircraftVisualAssetsRevision, setAircraftVisualAssetsRevision] = useState(0);
   const [skyAutoMode, setSkyAutoMode] = useState(true);
@@ -351,6 +353,12 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
   const handleResetSkySettings = useCallback(() => {
     setManualSkySettings(getDefaultSkySettings());
   }, []);
+
+  const announceSceneReady = useCallback(() => {
+    if (sceneReadyEmittedRef.current) return;
+    sceneReadyEmittedRef.current = true;
+    onSceneReady?.();
+  }, [onSceneReady]);
 
   /* ── Scene Setup ───────────────────────────────────────────────────── */
 
@@ -480,86 +488,96 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
       let aircraftAssetsUpdated = false;
       const visualLoadTasks: Promise<void>[] = [];
 
-      if (!shipCategoryTexturesRef.current) {
-        visualLoadTasks.push(
-          loadShipCategoryTextures()
-            .then((textures) => {
-              if (abortController.signal.aborted) return;
-              shipCategoryTexturesRef.current = textures;
-              visualAssetsUpdated = true;
-            })
-            .catch((error) => {
-              console.error("[harbor] Failed to load ship category textures", error);
-            }),
-        );
-      }
+      try {
+        if (!shipCategoryTexturesRef.current) {
+          visualLoadTasks.push(
+            loadShipCategoryTextures()
+              .then((textures) => {
+                if (abortController.signal.aborted) return;
+                shipCategoryTexturesRef.current = textures;
+                visualAssetsUpdated = true;
+              })
+              .catch((error) => {
+                console.error("[harbor] Failed to load ship category textures", error);
+              }),
+          );
+        }
 
-      if (!passengerFerryPrototypeRef.current) {
-        visualLoadTasks.push(
-          loadPassengerFerryPrototype()
-            .then((prototype) => {
-              if (abortController.signal.aborted) return;
-              passengerFerryPrototypeRef.current = prototype;
-              visualAssetsUpdated = true;
-            })
-            .catch((error) => {
-              console.error("[harbor] Failed to load passenger ferry model", error);
-            }),
-        );
-      }
+        if (!passengerFerryPrototypeRef.current) {
+          visualLoadTasks.push(
+            loadPassengerFerryPrototype()
+              .then((prototype) => {
+                if (abortController.signal.aborted) return;
+                passengerFerryPrototypeRef.current = prototype;
+                visualAssetsUpdated = true;
+              })
+              .catch((error) => {
+                console.error("[harbor] Failed to load passenger ferry model", error);
+              }),
+          );
+        }
 
-      if (!containerShipPrototypeRef.current) {
-        visualLoadTasks.push(
-          loadContainerShipPrototype()
-            .then((prototype) => {
-              if (abortController.signal.aborted) return;
-              containerShipPrototypeRef.current = prototype;
-              visualAssetsUpdated = true;
-            })
-            .catch((error) => {
-              console.error("[harbor] Failed to load container ship model", error);
-            }),
-        );
-      }
+        if (!containerShipPrototypeRef.current) {
+          visualLoadTasks.push(
+            loadContainerShipPrototype()
+              .then((prototype) => {
+                if (abortController.signal.aborted) return;
+                containerShipPrototypeRef.current = prototype;
+                visualAssetsUpdated = true;
+              })
+              .catch((error) => {
+                console.error("[harbor] Failed to load container ship model", error);
+              }),
+          );
+        }
 
-      if (!airplanePrototypeRef.current) {
-        visualLoadTasks.push(
-          loadAirplanePrototype()
-            .then((prototype) => {
-              if (abortController.signal.aborted) return;
-              airplanePrototypeRef.current = prototype;
-              aircraftAssetsUpdated = true;
-            })
-            .catch((error) => {
-              console.error("[harbor] Failed to load airplane model", error);
-            }),
-        );
-      }
+        if (!airplanePrototypeRef.current) {
+          visualLoadTasks.push(
+            loadAirplanePrototype()
+              .then((prototype) => {
+                if (abortController.signal.aborted) return;
+                airplanePrototypeRef.current = prototype;
+                aircraftAssetsUpdated = true;
+              })
+              .catch((error) => {
+                console.error("[harbor] Failed to load airplane model", error);
+              }),
+          );
+        }
 
-      if (RENDER_LAND_POLYGONS) {
-        await loadLandPolygons(scene, abortController.signal);
-      }
-      if (abortController.signal.aborted) return;
+        if (RENDER_LAND_POLYGONS) {
+          await loadLandPolygons(scene, abortController.signal);
+        }
+        if (abortController.signal.aborted) return;
 
-      if (RENDER_SMOKE_SKYLINE) {
-        await loadSkylineSmoke(scene, abortController.signal);
-      }
-      if (abortController.signal.aborted) return;
+        if (RENDER_SMOKE_SKYLINE) {
+          await loadSkylineSmoke(scene, abortController.signal);
+        }
+        if (abortController.signal.aborted) return;
 
-      await loadFerryRoutes(scene, abortController.signal);
-      if (!abortController.signal.aborted) {
-        ferryRouteTargets.length = 0;
-        ferryRouteTargets.push(...getFerryRouteTargets());
-      }
+        await loadFerryRoutes(scene, abortController.signal);
+        if (!abortController.signal.aborted) {
+          ferryRouteTargets.length = 0;
+          ferryRouteTargets.push(...getFerryRouteTargets());
+        }
 
-      if (visualLoadTasks.length > 0) {
-        await Promise.allSettled(visualLoadTasks);
-      }
-      if (visualAssetsUpdated && !abortController.signal.aborted) {
-        setShipVisualAssetsRevision((prev) => prev + 1);
-      }
-      if (aircraftAssetsUpdated && !abortController.signal.aborted) {
-        setAircraftVisualAssetsRevision((prev) => prev + 1);
+        if (visualLoadTasks.length > 0) {
+          await Promise.allSettled(visualLoadTasks);
+        }
+        if (visualAssetsUpdated && !abortController.signal.aborted) {
+          setShipVisualAssetsRevision((prev) => prev + 1);
+        }
+        if (aircraftAssetsUpdated && !abortController.signal.aborted) {
+          setAircraftVisualAssetsRevision((prev) => prev + 1);
+        }
+      } catch (error) {
+        if (!abortController.signal.aborted) {
+          console.error("[harbor] Scene bootstrap failed", error);
+        }
+      } finally {
+        if (!abortController.signal.aborted) {
+          announceSceneReady();
+        }
       }
     })();
 
@@ -753,7 +771,7 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
         hemiLightRef.current!.groundColor.set(lv.hemiGroundColor);
         sunLightRef.current!.intensity = lv.sunIntensity;
         sunLightRef.current!.color.set(lv.sunColor);
-        rendererRef.current.toneMapping = lv.toneMapping;
+        rendererRef.current.toneMapping = lv.toneMapping as THREE.ToneMapping;
         rendererRef.current.shadowMap.enabled = lv.shadowsEnabled;
         if (colorPassRef.current) {
           colorPassRef.current.uniforms.saturationBoost.value = lv.saturationBoost;
@@ -876,7 +894,7 @@ export function HarborScene({ ships, aircraft, environment }: HarborSceneProps) 
       abortController.abort();
       landPolygonRings.length = 0;
     };
-  }, [handleClose, handleShipClick, handleFerryRouteClick]);
+  }, [handleClose, handleShipClick, handleFerryRouteClick, announceSceneReady]);
 
   /* ── Ship Reconciliation ───────────────────────────────────────────── */
 

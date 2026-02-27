@@ -1001,12 +1001,17 @@ export function HarborScene({
       const marker =
         hits.length > 0 ? getShipMarkerFromObject(hits[0].object) : null;
       if (marker) {
-        const focusedShip = getShipMarkerData(marker).ship;
+        const markerData = getShipMarkerData(marker);
+        const focusedShip = markerData.ship;
         if (selectedShipRef.current?.ship.mmsi === focusedShip.mmsi) {
           handleClose();
           return;
         }
-        const zoomDist = 30;
+        const zoomDist = THREE.MathUtils.clamp(
+          markerData.radius * 3.8,
+          Math.max(42, controls.minDistance + 8),
+          Math.max(controls.minDistance + 8, controls.maxDistance * 0.42),
+        );
         const azimuth = controls.getAzimuthalAngle();
         const sinP = Math.sin(INITIAL_POLAR_ANGLE);
         const cosP = Math.cos(INITIAL_POLAR_ANGLE);

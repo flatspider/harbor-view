@@ -2,6 +2,11 @@ import * as THREE from "three";
 import { LAND_BASE_HEIGHT, LAND_SURFACE_Y, lonLatToWorld2 } from "./constants";
 import { toonGradient } from "./toonGradient";
 
+/* ── Experiment Toggles ────────────────────────────────────────────────
+   Flip these for rapid visual experimentation. */
+const USE_FLAT_LAND_COLOR = true;       // true = flat #6e7372, false = original greens
+const USE_TREE_PATTERN    = true;       // true = tree dot pattern on land surface
+
 /* ── Land Polygon Point-in-Polygon ───────────────────────────────────── */
 
 export interface LandRingRecord {
@@ -76,16 +81,74 @@ function polygonRingsToShape(rings: number[][][]): THREE.Shape | null {
   return shape;
 }
 
+/* ── Tree Pattern Texture ───────────────────────────────────────────── */
+
+function createTreePatternTexture(): THREE.CanvasTexture {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+
+  // Base color
+  ctx.fillStyle = "#6e7372";
+  ctx.fillRect(0, 0, size, size);
+
+  // Scatter small tree-like dots
+  const treeColor = "#4a5a4e";
+  const highlightColor = "#7d8b7a";
+  const rng = (seed: number) => {
+    let s = seed;
+    return () => { s = (s * 16807 + 0) % 2147483647; return s / 2147483647; };
+  };
+  const rand = rng(42);
+
+  for (let i = 0; i < 80; i++) {
+    const x = rand() * size;
+    const y = rand() * size;
+    const r = 2 + rand() * 4;
+
+    // Tree shadow/canopy
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = treeColor;
+    ctx.fill();
+
+    // Highlight dot
+    ctx.beginPath();
+    ctx.arc(x - r * 0.2, y - r * 0.2, r * 0.4, 0, Math.PI * 2);
+    ctx.fillStyle = highlightColor;
+    ctx.fill();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 4);
+  return tex;
+}
+
 function addGeoJsonLand(scene: THREE.Scene, data: GeoJsonFeatureCollection): boolean {
-  const landMaterial = new THREE.MeshToonMaterial({
-    color: "#5a8a55",
-    emissive: "#1a2a14",
+  /* ── Materials (toggle-aware) ──────────────────────────────────────── */
+  const landColor   = USE_FLAT_LAND_COLOR ? "#6e7372" : "#5a8a55";
+  const landEmissive = USE_FLAT_LAND_COLOR ? "#2a2d2c" : "#1a2a14";
+  const cliffColor  = USE_FLAT_LAND_COLOR ? "#5c5f5e" : "#4a7a44";
+  const cliffEmissive = USE_FLAT_LAND_COLOR ? "#1f2120" : "#141f10";
+
+  const landMaterialOpts: THREE.MeshToonMaterialParameters = {
+    color: landColor,
+    emissive: landEmissive,
     emissiveIntensity: 0.2,
     gradientMap: toonGradient,
-  });
+  };
+  if (USE_TREE_PATTERN) {
+    landMaterialOpts.map = createTreePatternTexture();
+  }
+
+  const landMaterial = new THREE.MeshToonMaterial(landMaterialOpts);
   const cliffMaterial = new THREE.MeshToonMaterial({
-    color: "#4a7a44",
-    emissive: "#141f10",
+    color: cliffColor,
+    emissive: cliffEmissive,
     emissiveIntensity: 0.15,
     gradientMap: toonGradient,
   });

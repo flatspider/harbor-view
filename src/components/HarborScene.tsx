@@ -66,7 +66,10 @@ import {
   loadShipCategoryTextures,
   type ShipCategoryTextureMap,
 } from "../scene/shipTextures";
-import { loadAirplanePrototypes, type AirplanePrototypeSet } from "../scene/airplaneModel";
+import {
+  loadAirplanePrototypes,
+  type AirplanePrototypeSet,
+} from "../scene/airplaneModel";
 import { loadContainerShipPrototype } from "../scene/containerShipModel";
 import { loadPassengerFerryPrototype } from "../scene/passengerFerryModel";
 import { loadSmallBoatPrototype } from "../scene/smallBoatModel";
@@ -277,6 +280,59 @@ function disposeObject3D(object: THREE.Object3D): void {
   });
 }
 
+function createFastestShipIndicator(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "fastest-ship-indicator";
+  group.visible = false;
+  group.renderOrder = 25;
+
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.2, 0.2, 8.4, 12),
+    new THREE.MeshBasicMaterial({
+      color: "#f7f9fb",
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false,
+    }),
+  );
+  pole.position.y = 4.2;
+  group.add(pole);
+
+  const pennantShape = new THREE.Shape();
+  pennantShape.moveTo(0, 0);
+  pennantShape.lineTo(4.4, 1.2);
+  pennantShape.lineTo(0, 2.4);
+  pennantShape.lineTo(1.1, 1.2);
+  pennantShape.lineTo(0, 0);
+  const pennant = new THREE.Mesh(
+    new THREE.ShapeGeometry(pennantShape),
+    new THREE.MeshBasicMaterial({
+      color: "#ff6f61",
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false,
+    }),
+  );
+  pennant.position.set(0.3, 5.7, 0);
+  pennant.rotation.y = Math.PI / 2;
+  group.add(pennant);
+
+  const arrowTip = new THREE.Mesh(
+    new THREE.ConeGeometry(0.95, 2.3, 14),
+    new THREE.MeshBasicMaterial({
+      color: "#ffe08c",
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false,
+    }),
+  );
+  arrowTip.position.y = 8.7;
+  group.add(arrowTip);
+
+  return group;
+}
+
 export function HarborScene({
   ships,
   aircraft,
@@ -318,6 +374,9 @@ export function HarborScene({
   const labelElementsRef = useRef(new Map<string, HTMLDivElement>());
   const hemiLightRef = useRef<THREE.HemisphereLight | null>(null);
   const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const fastestShipIndicatorRef = useRef<THREE.Group | null>(null);
+  const fastestShipMmsiRef = useRef<number | null>(null);
+  const nextFastestScanAtMsRef = useRef(0);
   const backgroundColorRef = useRef(new THREE.Color());
   const lastBackgroundRef = useRef(new THREE.Color());
   const skyMeshRef = useRef<THREE.Mesh | null>(null);
@@ -376,19 +435,39 @@ export function HarborScene({
     sceneWidth: number;
     sceneHeight: number;
   } | null>(null);
+  const selectedShipRef = useRef<typeof selectedShip>(null);
+  const selectedFerryRouteRef = useRef<typeof selectedFerryRoute>(null);
+  const selectedShipMarkerRef = useRef<ShipMesh | null>(null);
+  const tooltipOpenedAtMsRef = useRef<number>(0);
+  const cameraFocusRef = useRef<{
+    startMs: number;
+    durationMs: number;
+    fromCamera: THREE.Vector3;
+    toCamera: THREE.Vector3;
+    fromTarget: THREE.Vector3;
+    toTarget: THREE.Vector3;
+  } | null>(null);
   const showDebugGrid =
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).has("grid");
 
+  useEffect(() => {
+    selectedShipRef.current = selectedShip;
+  }, [selectedShip]);
+  useEffect(() => {
+    selectedFerryRouteRef.current = selectedFerryRoute;
+  }, [selectedFerryRoute]);
+
   const handleShipClick = useCallback(
-    (ship: ShipData, worldPos: THREE.Vector3) => {
-      console.count("handleShipClick");
+    (ship: ShipData, worldPos: THREE.Vector3, marker?: ShipMesh) => {
       const sceneRect = sceneRef.current?.getBoundingClientRect();
       const camera = cameraRef.current;
       if (!sceneRect || !camera) return;
       const projected = worldPos.clone().project(camera);
       const x = (projected.x + 1) * 0.5 * sceneRect.width;
       const y = (-projected.y + 1) * 0.5 * sceneRect.height;
+      tooltipOpenedAtMsRef.current = performance.now();
+      selectedShipMarkerRef.current = marker ?? null;
       setSelectedFerryRoute(null);
       setSelectedShip({
         ship,
@@ -409,6 +488,7 @@ export function HarborScene({
       const projected = worldPos.clone().project(camera);
       const x = (projected.x + 1) * 0.5 * sceneRect.width;
       const y = (-projected.y + 1) * 0.5 * sceneRect.height;
+      tooltipOpenedAtMsRef.current = performance.now();
       setSelectedShip(null);
       setSelectedFerryRoute({
         route,
@@ -424,6 +504,9 @@ export function HarborScene({
   const handleClose = useCallback(() => {
     setSelectedShip(null);
     setSelectedFerryRoute(null);
+    selectedShipMarkerRef.current = null;
+    tooltipOpenedAtMsRef.current = 0;
+    cameraFocusRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -613,7 +696,8 @@ export function HarborScene({
     const clampPan = () => {
       const dist = camera.position.distanceTo(controls.target);
       const zoomT = THREE.MathUtils.clamp(
-        (dist - controls.minDistance) / (controls.maxDistance - controls.minDistance),
+        (dist - controls.minDistance) /
+          (controls.maxDistance - controls.minDistance),
         0,
         1,
       );
@@ -622,8 +706,16 @@ export function HarborScene({
       const limitFraction = THREE.MathUtils.lerp(0.48, 0.15, zoomT);
       const halfX = WORLD_WIDTH * limitFraction;
       const halfZ = WORLD_DEPTH * limitFraction;
-      controls.target.x = THREE.MathUtils.clamp(controls.target.x, -halfX, halfX);
-      controls.target.z = THREE.MathUtils.clamp(controls.target.z, -halfZ, halfZ);
+      controls.target.x = THREE.MathUtils.clamp(
+        controls.target.x,
+        -halfX,
+        halfX,
+      );
+      controls.target.z = THREE.MathUtils.clamp(
+        controls.target.z,
+        -halfZ,
+        halfZ,
+      );
     };
     controls.addEventListener("change", clampPan);
     controls.update();
@@ -643,6 +735,10 @@ export function HarborScene({
 
     const skyMesh = createSkyBackdrop(scene);
     skyMeshRef.current = skyMesh;
+
+    const fastestShipIndicator = createFastestShipIndicator();
+    scene.add(fastestShipIndicator);
+    fastestShipIndicatorRef.current = fastestShipIndicator;
 
     const windParticles = createWindParticles(scene);
     windParticlesRef.current = windParticles;
@@ -716,7 +812,10 @@ export function HarborScene({
                 visualAssetsUpdated = true;
               })
               .catch((error) => {
-                console.error("[harbor] Failed to load small boat model", error);
+                console.error(
+                  "[harbor] Failed to load small boat model",
+                  error,
+                );
               }),
           );
         }
@@ -803,6 +902,10 @@ export function HarborScene({
       pointerDownRef.current = { x: event.clientX, y: event.clientY };
     };
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") handleClose();
+    };
+
     const setFerryLineColor = (line: THREE.Line, color: THREE.Color) => {
       const material = line.material;
       if (!Array.isArray(material)) {
@@ -878,7 +981,6 @@ export function HarborScene({
     };
 
     const handlePointerUp = (event: PointerEvent) => {
-      console.count("pointerup");
       if (!sceneRef.current || !cameraRef.current || !rendererRef.current)
         return;
       const down = pointerDownRef.current;
@@ -900,25 +1002,28 @@ export function HarborScene({
         hits.length > 0 ? getShipMarkerFromObject(hits[0].object) : null;
       if (marker) {
         const focusedShip = getShipMarkerData(marker).ship;
-        controls.target.copy(marker.position);
-        clampPan();
-        // Zoom in at the locked polar angle — compute offset from the fixed
-        // elevation angle and current azimuthal angle so the camera never
-        // tilts (which would trigger water flicker).
+        if (selectedShipRef.current?.ship.mmsi === focusedShip.mmsi) {
+          handleClose();
+          return;
+        }
         const zoomDist = 30;
         const azimuth = controls.getAzimuthalAngle();
         const sinP = Math.sin(INITIAL_POLAR_ANGLE);
         const cosP = Math.cos(INITIAL_POLAR_ANGLE);
-        camera.position.lerp(
-          new THREE.Vector3(
-            marker.position.x + zoomDist * sinP * Math.sin(azimuth),
-            marker.position.y + zoomDist * cosP,
-            marker.position.z + zoomDist * sinP * Math.cos(azimuth),
-          ),
-          0.9,
+        const nextCamera = new THREE.Vector3(
+          marker.position.x + zoomDist * sinP * Math.sin(azimuth),
+          marker.position.y + zoomDist * cosP,
+          marker.position.z + zoomDist * sinP * Math.cos(azimuth),
         );
-        controls.update();
-        handleShipClick(focusedShip, marker.position);
+        cameraFocusRef.current = {
+          startMs: performance.now(),
+          durationMs: 900,
+          fromCamera: camera.position.clone(),
+          toCamera: nextCamera,
+          fromTarget: controls.target.clone(),
+          toTarget: marker.position.clone(),
+        };
+        handleShipClick(focusedShip, marker.position, marker);
         return;
       }
 
@@ -943,6 +1048,7 @@ export function HarborScene({
     mount.addEventListener("pointerdown", handlePointerDown);
     mount.addEventListener("pointermove", handlePointerMove);
     mount.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("keydown", handleKeyDown);
     mount.style.cursor = "grab";
 
     // Animation loop
@@ -992,11 +1098,15 @@ export function HarborScene({
         );
         lastBackgroundRef.current.copy(backgroundColorRef.current);
       }
+      disposeWindParticles(windParticlesRef.current);
+      windParticlesRef.current = null;
       if (skyMeshRef.current) {
         // Throttle sky recomputation — sun angles only change once per minute,
         // weather only changes on fetch. Rewriting uniforms every frame causes
         // sub-pixel oscillation through the post-processing chain.
-        const manualSky = skyAutoModeRef.current ? undefined : manualSkySettingsRef.current;
+        const manualSky = skyAutoModeRef.current
+          ? undefined
+          : manualSkySettingsRef.current;
         if (time >= nextSkyUpdate || manualSky || !cachedSkySettings) {
           cachedSkySettings = animateSky(
             skyMeshRef.current,
@@ -1010,7 +1120,8 @@ export function HarborScene({
         const targetExposure = lightingOverrideRef.current
           ? lightingValuesRef.current.exposure
           : appliedSky.exposure;
-        const expDelta = targetExposure - rendererRef.current.toneMappingExposure;
+        const expDelta =
+          targetExposure - rendererRef.current.toneMappingExposure;
         rendererRef.current.toneMappingExposure =
           Math.abs(expDelta) < 0.001
             ? targetExposure
@@ -1043,11 +1154,20 @@ export function HarborScene({
           // Snap to target when within epsilon to stop per-frame oscillation.
           const bloomLerp = 0.12;
           const bsDelta = lv.bloomStrength - bloomPassRef.current.strength;
-          bloomPassRef.current.strength = Math.abs(bsDelta) < 0.001 ? lv.bloomStrength : bloomPassRef.current.strength + bsDelta * bloomLerp;
+          bloomPassRef.current.strength =
+            Math.abs(bsDelta) < 0.001
+              ? lv.bloomStrength
+              : bloomPassRef.current.strength + bsDelta * bloomLerp;
           const brDelta = lv.bloomRadius - bloomPassRef.current.radius;
-          bloomPassRef.current.radius = Math.abs(brDelta) < 0.001 ? lv.bloomRadius : bloomPassRef.current.radius + brDelta * bloomLerp;
+          bloomPassRef.current.radius =
+            Math.abs(brDelta) < 0.001
+              ? lv.bloomRadius
+              : bloomPassRef.current.radius + brDelta * bloomLerp;
           const btDelta = lv.bloomThreshold - bloomPassRef.current.threshold;
-          bloomPassRef.current.threshold = Math.abs(btDelta) < 0.001 ? lv.bloomThreshold : bloomPassRef.current.threshold + btDelta * bloomLerp;
+          bloomPassRef.current.threshold =
+            Math.abs(btDelta) < 0.001
+              ? lv.bloomThreshold
+              : bloomPassRef.current.threshold + btDelta * bloomLerp;
         }
       }
       if (cachedNight !== appliedFerryNight) {
@@ -1061,13 +1181,101 @@ export function HarborScene({
         1,
       );
       // Base scale decreases naturally from close to mid-range
-      const baseZoomScale = THREE.MathUtils.lerp(2.2, 1.0, Math.pow(zoomProgress, 0.65));
+      const baseZoomScale = THREE.MathUtils.lerp(
+        2.2,
+        1.0,
+        Math.pow(zoomProgress, 0.65),
+      );
       // Far-distance boost kicks in past ~25% zoom-out, growing models for visibility
       const farBoost = Math.pow(Math.max(0, zoomProgress - 0.25), 2) * 3.5;
       const shipZoomScale = baseZoomScale + farBoost;
       animateShips(shipMarkers, t, shipZoomScale);
       animateAircraft(aircraftMarkersRef.current, t, shipZoomScale);
+      const fastestShipIndicator = fastestShipIndicatorRef.current;
+      if (fastestShipIndicator) {
+        if (time >= nextFastestScanAtMsRef.current) {
+          let fastestMmsi: number | null = null;
+          let fastestSog = -Infinity;
+          for (const marker of shipMarkers.values()) {
+            if (!marker.visible) continue;
+            const markerData = getShipMarkerData(marker);
+            const sog = markerData.ship.sog;
+            if (!Number.isFinite(sog) || sog <= fastestSog) continue;
+            fastestSog = sog;
+            fastestMmsi = markerData.mmsi;
+          }
+          fastestShipMmsiRef.current = fastestSog > 0.1 ? fastestMmsi : null;
+          nextFastestScanAtMsRef.current = time + 60_000;
+        }
+        const fastestMmsi = fastestShipMmsiRef.current;
+        const fastestMarker =
+          fastestMmsi != null ? shipMarkers.get(fastestMmsi) ?? null : null;
+        if (!fastestMarker || !fastestMarker.visible) {
+          fastestShipIndicator.visible = false;
+        } else {
+          fastestShipIndicator.visible = true;
+          fastestShipIndicator.position.copy(fastestMarker.position);
+          fastestShipIndicator.position.y += 10.5;
+          const pulse = 1 + Math.sin(t * 4.2) * 0.08;
+          fastestShipIndicator.scale.setScalar(pulse);
+          fastestShipIndicator.lookAt(
+            camera.position.x,
+            fastestShipIndicator.position.y,
+            camera.position.z,
+          );
+        }
+      }
+      if (cameraFocusRef.current) {
+        const focus = cameraFocusRef.current;
+        const progress = THREE.MathUtils.clamp(
+          (time - focus.startMs) / focus.durationMs,
+          0,
+          1,
+        );
+        const eased = progress * progress * (3 - 2 * progress);
+        camera.position.lerpVectors(focus.fromCamera, focus.toCamera, eased);
+        controls.target.lerpVectors(focus.fromTarget, focus.toTarget, eased);
+        clampPan();
+        if (progress >= 1) cameraFocusRef.current = null;
+      }
       controls.update();
+      const hasOpenTooltip =
+        selectedShipRef.current != null || selectedFerryRouteRef.current != null;
+      const tooltipCloseDistance = controls.maxDistance * 0.72;
+      const tooltipOpenAgeMs = time - tooltipOpenedAtMsRef.current;
+      const currentCameraDistance = camera.position.distanceTo(controls.target);
+      if (
+        hasOpenTooltip &&
+        cameraFocusRef.current == null &&
+        tooltipOpenAgeMs > 450 &&
+        currentCameraDistance >= tooltipCloseDistance
+      ) {
+        handleClose();
+      }
+      const selectedMarker = selectedShipMarkerRef.current;
+      if (selectedMarker && selectedShipRef.current && sceneRef.current) {
+        const projected = selectedMarker.position.clone().project(camera);
+        const nextX = (projected.x + 1) * 0.5 * sceneRef.current.clientWidth;
+        const nextY = (-projected.y + 1) * 0.5 * sceneRef.current.clientHeight;
+        setSelectedShip((prev) => {
+          if (!prev) return prev;
+          if (
+            Math.abs(prev.x - nextX) < 0.5 &&
+            Math.abs(prev.y - nextY) < 0.5 &&
+            prev.sceneWidth === sceneRef.current!.clientWidth &&
+            prev.sceneHeight === sceneRef.current!.clientHeight
+          ) {
+            return prev;
+          }
+          return {
+            ...prev,
+            x: nextX,
+            y: nextY,
+            sceneWidth: sceneRef.current!.clientWidth,
+            sceneHeight: sceneRef.current!.clientHeight,
+          };
+        });
+      }
 
       if (sceneRef.current && cameraRef.current) {
         projectLabels(
@@ -1114,6 +1322,7 @@ export function HarborScene({
       mount.removeEventListener("pointerdown", handlePointerDown);
       mount.removeEventListener("pointermove", handlePointerMove);
       mount.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("keydown", handleKeyDown);
       if (pointerMoveRafRef.current != null) {
         cancelAnimationFrame(pointerMoveRafRef.current);
         pointerMoveRafRef.current = null;
@@ -1138,12 +1347,17 @@ export function HarborScene({
       }
       controls.dispose();
       controlsRef.current = null;
-      disposeWindParticles(windParticlesRef.current);
-      windParticlesRef.current = null;
       if (skyMeshRef.current) {
         disposeSkyBackdrop(scene, skyMeshRef.current);
         skyMeshRef.current = null;
       }
+      if (fastestShipIndicatorRef.current) {
+        scene.remove(fastestShipIndicatorRef.current);
+        disposeObject3D(fastestShipIndicatorRef.current);
+        fastestShipIndicatorRef.current = null;
+      }
+      fastestShipMmsiRef.current = null;
+      nextFastestScanAtMsRef.current = 0;
       if (composerRef.current) {
         composerRef.current.renderTarget1.dispose();
         composerRef.current.renderTarget2.dispose();

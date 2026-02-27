@@ -61,7 +61,10 @@
       "WebFetch(domain:api.adsb.lol)",
       "Bash(bunx tsc:*)",
       "Bash(aws:*)",
-      "mcp__playwright__browser_close"
+      "mcp__playwright__browser_close",
+      "Bash(pip3 list:*)",
+      "Bash(pip3 install:*)",
+      "Bash(source:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

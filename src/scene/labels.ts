@@ -30,10 +30,11 @@ export function projectLabels(
   container: HTMLDivElement,
   labelElements: Map<string, HTMLDivElement>,
   labelSizes: Map<string, { width: number; height: number }>,
-  occlusionTargets?: THREE.Object3D[],
+  occlusionTargets?: THREE.Mesh[],
 ): void {
   const OCCLUDED_OPACITY = 0.2;
   const raycaster = new THREE.Raycaster();
+  raycaster.camera = camera;
   const placedRects: Array<{ left: number; right: number; top: number; bottom: number }> = [];
   const overlapPadding = 10;
   const isOverlapping = (
@@ -63,7 +64,7 @@ export function projectLabels(
       if (labelDistance > 0.001) {
         raycaster.set(camera.position, toLabel.multiplyScalar(1 / labelDistance));
         raycaster.far = Math.max(0, labelDistance - 0.5);
-        const hits = raycaster.intersectObjects(occlusionTargets, true);
+        const hits = raycaster.intersectObjects(occlusionTargets, false);
         if (hits.length > 0) occluded = true;
       }
     }

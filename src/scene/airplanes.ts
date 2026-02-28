@@ -14,6 +14,7 @@ const AIRCRAFT_ACCENT_COLOR = "#c44d4d";
 const AIRCRAFT_STALE_MS = 30_000;
 const AIRCRAFT_PREDICTION_MAX_MS = 30_000;
 const AIRCRAFT_CORRECTION_HALF_LIFE_MS = 1_900;
+const AIRCRAFT_VISUAL_SCALE_MULTIPLIER = 1.35;
 
 // Knots to world units per millisecond
 const KNOTS_TO_WORLD_PER_MS = 0.0005144 * WORLD_UNITS_PER_METER;
@@ -473,7 +474,12 @@ export function animateAircraft(
     // Scale by zoom
     const sizeScale = SIZE_SCALES[data.sizeClass];
     const modelBoost = data.usesModel ? 1.65 : 1;
-    const visualScale = sizeScale * zoomScale * 0.8 * modelBoost;
+    const visualScale =
+      sizeScale *
+      zoomScale *
+      0.8 *
+      modelBoost *
+      AIRCRAFT_VISUAL_SCALE_MULTIPLIER;
     marker.scale.setScalar(visualScale);
   }
 }

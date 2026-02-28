@@ -11,7 +11,6 @@ interface PassengerFerryMetrics {
 }
 
 const PASSENGER_FERRY_MODEL_URL = "/models/passenger-ferry-optimized.glb";
-const PASSENGER_FERRY_FALLBACK_MODEL_URL = "/models/Meshy_AI_Orange_Ferry_at_Sea_0226181516_texture.glb";
 const DRACO_DECODER_PATH = "/draco/";
 const PASSENGER_FERRY_TARGET_LENGTH = 21;
 const PASSENGER_FERRY_BASE_Y = 1;
@@ -155,15 +154,9 @@ export function loadPassengerFerryPrototype(): Promise<THREE.Object3D> {
   if (passengerFerryLoadPromise) return passengerFerryLoadPromise;
 
   passengerFerryLoadPromise = (async () => {
-    try {
-      const optimizedPrototype = await loadModel(PASSENGER_FERRY_MODEL_URL, true);
-      normalizePrototype(optimizedPrototype);
-      return optimizedPrototype;
-    } catch {
-      const fallbackPrototype = await loadModel(PASSENGER_FERRY_FALLBACK_MODEL_URL, false);
-      normalizePrototype(fallbackPrototype);
-      return fallbackPrototype;
-    }
+    const optimizedPrototype = await loadModel(PASSENGER_FERRY_MODEL_URL, true);
+    normalizePrototype(optimizedPrototype);
+    return optimizedPrototype;
   })().catch((error) => {
     passengerFerryLoadPromise = null;
     throw error;

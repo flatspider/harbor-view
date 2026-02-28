@@ -28,8 +28,8 @@ bun run data:build-harbor-land
 
 What this does:
 
-- Writes shoreline lines to `public/assets/data/noaa-shoreline.geojson`
-- Updates coastline overlay at `public/assets/data/harbor-coastline-lines.geojson`
+- Writes shoreline lines to `data/sources/noaa-shoreline.geojson`
+- Updates coastline overlay at `data/sources/harbor-coastline-lines.geojson`
 - Rebuilds `public/assets/data/nyc-harbor-land.geojson` from NOAA shoreline geometry
 
 Default harbor bounds used in import/build:
@@ -62,11 +62,17 @@ bun run data:build-harbor-land
 
 ## Merge + Clip New Jersey Coastline
 
-If you downloaded New Jersey files, place them in this folder as:
+If you downloaded New Jersey source files, place them under `data/sources/` as:
 
-- `nj-land-polygons.geojson` (preferred for filled land)
-- `nj-coastline.geojson` (linework/boundaries)
+- `coastline-nj-harbor.geojson` (linework/boundaries)
+- `nj-counties-500k.geojson` (county source polygons; optional depending on build path)
 - `harbor-water-polygons.geojson` (optional but recommended; used to carve waterways out of land polygons)
+
+Runtime files that should remain in `public/assets/data/`:
+
+- `nyc-harbor-land.geojson`
+- `nj-land-polygons.geojson`
+- `manhattan-skyline-smoke.geojson`
 
 Then run:
 
@@ -88,15 +94,15 @@ Or pass explicit paths:
 
 ```bash
 bun run data:merge-harbor-land -- \
-  --nj-land /absolute/path/to/nj-land-polygons.geojson \
-  --nj-coast /absolute/path/to/nj-coastline.geojson
+  --nj-land /absolute/path/to/public/assets/data/nj-land-polygons.geojson \
+  --nj-coast /absolute/path/to/data/sources/coastline-nj-harbor.geojson
 ```
 
 Optional arguments:
 
 - `--nyc` path to existing NYC land file (default: `public/assets/data/nyc-harbor-land.geojson`)
 - `--out` output path (default: `public/assets/data/nyc-harbor-land.geojson`)
-- `--out-lines` output path for clipped coastline lines (default: `public/assets/data/harbor-coastline-lines.geojson`)
+- `--out-lines` output path for clipped coastline lines (default: `data/sources/harbor-coastline-lines.geojson`)
 - `--nj-land` input path for NJ polygon land file
 - `--nj-coast` input path for NJ coastline line file
 - `--nj` legacy single-input path (can contain polygons, lines, or both)

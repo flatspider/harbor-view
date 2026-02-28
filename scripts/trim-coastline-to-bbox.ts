@@ -10,7 +10,7 @@ import type {
 } from "geojson";
 
 const DEFAULT_BBOX: [number, number, number, number] = [-74.26, 40.48, -73.75, 40.9];
-const DEFAULT_OUTPUT = "public/assets/data/coastline-nj-harbor.geojson";
+const DEFAULT_OUTPUT = "data/sources/coastline-nj-harbor.geojson";
 
 interface Args {
   input: string;

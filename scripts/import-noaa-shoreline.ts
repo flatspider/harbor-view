@@ -11,8 +11,8 @@ import type {
 } from "geojson";
 
 const DEFAULT_BBOX: [number, number, number, number] = [-74.26, 40.48, -73.75, 40.78];
-const DEFAULT_OUTPUT = "public/assets/data/noaa-shoreline.geojson";
-const DEFAULT_COASTLINE_OUTPUT = "public/assets/data/harbor-coastline-lines.geojson";
+const DEFAULT_OUTPUT = "data/sources/noaa-shoreline.geojson";
+const DEFAULT_COASTLINE_OUTPUT = "data/sources/harbor-coastline-lines.geojson";
 
 interface Args {
   input: string;

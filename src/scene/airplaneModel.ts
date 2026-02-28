@@ -16,17 +16,13 @@ export type AirplanePrototypeSet = Partial<Record<AirplaneVariant, THREE.Object3
 const AIRPLANE_VARIANT_SOURCES: Record<AirplaneVariant, string[]> = {
   glider: [
     "/models/glider-optimized.glb",
-    "/models/Meshy_AI_Blue_Winged_Sky_Racer_0227211314_texture.glb",
   ],
   biplane: [
     "/models/biplane-optimized.glb",
-    "/models/Meshy_AI_Golden_Biplane_0227212937_texture.glb",
-    "/models/Meshy_AI_Backyard_Aviator_0227203010_texture.glb",
   ],
   zeppelin: [
     "/models/zeppelin-optimized.glb",
     "/models/airplane-optimized.glb",
-    "/models/Meshy_AI_Skybound_Ark_0226195620_texture.glb",
   ],
 };
 const DRACO_DECODER_PATH = "/draco/";

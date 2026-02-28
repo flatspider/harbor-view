@@ -11,7 +11,6 @@ interface ContainerShipMetrics {
 }
 
 const CONTAINER_SHIP_MODEL_URL = "/models/container-ship-optimized.glb";
-const CONTAINER_SHIP_FALLBACK_MODEL_URL = "/models/Meshy_AI_Colorful_Container_Sh_0226194049_texture.glb";
 const DRACO_DECODER_PATH = "/draco/";
 const CONTAINER_SHIP_TARGET_LENGTH = 25;
 const CONTAINER_SHIP_BASE_Y = 1;
@@ -150,15 +149,9 @@ export function loadContainerShipPrototype(): Promise<THREE.Object3D> {
   if (containerShipLoadPromise) return containerShipLoadPromise;
 
   containerShipLoadPromise = (async () => {
-    try {
-      const optimizedPrototype = await loadModel(CONTAINER_SHIP_MODEL_URL, true);
-      normalizePrototype(optimizedPrototype);
-      return optimizedPrototype;
-    } catch {
-      const fallbackPrototype = await loadModel(CONTAINER_SHIP_FALLBACK_MODEL_URL, false);
-      normalizePrototype(fallbackPrototype);
-      return fallbackPrototype;
-    }
+    const optimizedPrototype = await loadModel(CONTAINER_SHIP_MODEL_URL, true);
+    normalizePrototype(optimizedPrototype);
+    return optimizedPrototype;
   })().catch((error) => {
     containerShipLoadPromise = null;
     throw error;

@@ -16,7 +16,7 @@ import type {
 } from "geojson";
 
 const DEFAULT_BBOX: [number, number, number, number] = [-74.26, 40.48, -73.75, 40.78];
-const DEFAULT_INPUT = "public/assets/data/noaa-shoreline.geojson";
+const DEFAULT_INPUT = "data/sources/noaa-shoreline.geojson";
 const DEFAULT_OUTPUT = "public/assets/data/nyc-harbor-land.geojson";
 const DEFAULT_GRID_COLS = 420;
 const DEFAULT_GRID_ROWS = 360;

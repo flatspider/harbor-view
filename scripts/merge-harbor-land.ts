@@ -18,9 +18,9 @@ import type {
 const DEFAULT_BBOX: [number, number, number, number] = [-74.26, 40.48, -73.75, 40.78];
 const DEFAULT_NYC_PATH = "public/assets/data/nyc-harbor-land.geojson";
 const DEFAULT_OUTPUT_PATH = "public/assets/data/nyc-harbor-land.geojson";
-const DEFAULT_NJ_COAST_PATH = "public/assets/data/nj-coastline.geojson";
+const DEFAULT_NJ_COAST_PATH = "data/sources/coastline-nj-harbor.geojson";
 const DEFAULT_NJ_LAND_PATH = "public/assets/data/nj-land-polygons.geojson";
-const DEFAULT_WATER_MASK_PATH = "public/assets/data/harbor-water-polygons.geojson";
+const DEFAULT_WATER_MASK_PATH = "data/sources/harbor-water-polygons.geojson";
 
 interface Args {
   njPaths: string[];
@@ -106,7 +106,7 @@ function parseArgs(argv: string[]): Args {
     carveNycWithWater: parseBooleanArg(args.get("--carve-nyc-with-water"), false),
     nycPath: args.get("--nyc") ?? DEFAULT_NYC_PATH,
     outPath: args.get("--out") ?? DEFAULT_OUTPUT_PATH,
-    outLinesPath: args.get("--out-lines") ?? "public/assets/data/harbor-coastline-lines.geojson",
+    outLinesPath: args.get("--out-lines") ?? "data/sources/harbor-coastline-lines.geojson",
     bbox,
   };
 }

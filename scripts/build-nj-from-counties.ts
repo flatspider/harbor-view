@@ -32,8 +32,8 @@ import difference from "@turf/difference";
 const BBOX: [number, number, number, number] = [-74.26, 40.48, -73.75, 40.9];
 const [WEST, SOUTH, EAST, NORTH] = BBOX;
 
-const COUNTIES_INPUT = "public/assets/data/nj-counties-500k.geojson";
-const COASTLINE_INPUT = "public/assets/data/coastline-nj-harbor.geojson";
+const COUNTIES_INPUT = "data/sources/nj-counties-500k.geojson";
+const COASTLINE_INPUT = "data/sources/coastline-nj-harbor.geojson";
 const OUTPUT = "public/assets/data/nj-land-polygons.geojson";
 
 // Latitude band resolution for the frontier (degrees)

@@ -39,7 +39,7 @@ bun run dev
 - `bun run dev:client` - runs Vite only (no AIS relay)
 - `bun run build` - typecheck + build frontend
 - `bun run preview` - production-mode Express server
-- `bun run data:import-noaa-shoreline -- --input /abs/path/N40W075.shp` - convert NOAA shapefile to shoreline GeoJSON
+- `bun run data:import-noaa-shoreline -- --input /abs/path/N40W075.shp` - convert NOAA shapefile to source GeoJSON under `data/sources/`
 - `bun run data:build-harbor-land` - rebuild `public/assets/data/nyc-harbor-land.geojson` from shoreline lines
 
 ## Architecture
@@ -71,6 +71,10 @@ bun run dev
 For coastline and land-mass rendering in the Three.js harbor scene, add:
 
 - `public/assets/data/nyc-harbor-land.geojson`
+
+Script/source geodata should live outside the runtime asset tree in:
+
+- `data/sources/`
 
 Format details are in [`public/assets/data/README.md`](./public/assets/data/README.md), with a starter template in:
 

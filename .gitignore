@@ -36,3 +36,7 @@ public/assets/data/**/*.shx
 public/assets/data/**/*.prj
 
 public/models/*.glb
+
+# Non-runtime source artifacts
+data/sources/Coastline_of_New_Jersey.geojson
+data/sources/models/*.glb

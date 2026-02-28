@@ -10,7 +10,7 @@ import type {
 } from "geojson";
 
 const DEFAULT_BBOX: [number, number, number, number] = [-74.26, 40.48, -73.75, 40.78];
-const DEFAULT_INPUT = "public/assets/data/coastline-nj-harbor.geojson";
+const DEFAULT_INPUT = "data/sources/coastline-nj-harbor.geojson";
 const DEFAULT_OUTPUT = "public/assets/data/nj-land-polygons.geojson";
 const DEFAULT_GRID_COLS = 360;
 const DEFAULT_GRID_ROWS = 300;

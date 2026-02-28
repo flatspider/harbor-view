@@ -11,18 +11,24 @@ const STATUS_INDICATOR: Record<string, { color: string; label: string }> = {
   error: { color: "#da3633", label: "Error" },
 };
 
-export function StatusBar({ shipCount, aircraftCount, connectionStatus }: StatusBarProps) {
+export function StatusBar({
+  shipCount,
+  aircraftCount,
+  connectionStatus,
+}: StatusBarProps) {
   const status = STATUS_INDICATOR[connectionStatus];
 
   return (
     <div className="status-bar">
       <div className="status-title">
         <h1>Harbor Watch</h1>
-        <span className="status-subtitle">New York Harbor — Live</span>
       </div>
       <div className="status-info">
         <div className="status-indicator">
-          <span className="status-dot" style={{ backgroundColor: status.color }} />
+          <span
+            className="status-dot"
+            style={{ backgroundColor: status.color }}
+          />
           <span>{status.label}</span>
         </div>
         <div className="status-ship-count">

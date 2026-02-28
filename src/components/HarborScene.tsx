@@ -134,6 +134,7 @@ const SKY_SLIDERS: SkySliderConfig[] = [
   { key: "azimuth", label: "Azimuth", min: 0, max: 360, step: 0.1, digits: 1 },
   { key: "exposure", label: "Exposure", min: 0, max: 2, step: 0.01, digits: 2 },
 ];
+const SHOW_SCENE_DEBUG_PANELS = false;
 
 const FASTEST_SHIP_MIN_OBSERVED_SPEED_KNOTS = 1.2;
 const FASTEST_SHIP_MIN_OBSERVED_SAMPLE_MS = 1_000;
@@ -1128,8 +1129,21 @@ export function HarborScene({
         aircraftRaycastTargets.push(marker);
       }
       const hits = raycasterRef.current.intersectObjects(raycastTargets, true);
-      const marker =
-        hits.length > 0 ? getShipMarkerFromObject(hits[0].object) : null;
+      const selectedShipMmsi = selectedShipRef.current?.ship.mmsi ?? null;
+      let marker: ShipMesh | null = null;
+      let selectedMarkerHit: ShipMesh | null = null;
+      for (const hit of hits) {
+        const candidate = getShipMarkerFromObject(hit.object);
+        if (!candidate) continue;
+        const candidateMmsi = getShipMarkerData(candidate).mmsi;
+        if (selectedShipMmsi != null && candidateMmsi === selectedShipMmsi) {
+          if (!selectedMarkerHit) selectedMarkerHit = candidate;
+          continue;
+        }
+        marker = candidate;
+        break;
+      }
+      if (!marker) marker = selectedMarkerHit;
       if (marker) {
         const markerData = getShipMarkerData(marker);
         const focusedShip = markerData.ship;
@@ -1740,260 +1754,262 @@ export function HarborScene({
       <div className="harbor-scene-overlay">
         Drag to pan, scroll to zoom, hover to inspect vessels and ferry routes.
       </div>
-      <div
-        className="sky-controls"
-        onPointerDown={(event) => event.stopPropagation()}
-        onPointerMove={(event) => event.stopPropagation()}
-        onPointerUp={(event) => event.stopPropagation()}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <button
-          type="button"
-          className="sky-controls-toggle"
-          onClick={() => setSkyPanelOpen((open) => !open)}
-        >
-          {skyPanelOpen ? "Hide Sky Controls" : "Sky Controls"}
-        </button>
-        {skyPanelOpen && (
-          <div className="sky-controls-panel">
-            <div className="sky-controls-row">
-              <label className="sky-controls-check">
-                <input
-                  type="checkbox"
-                  checked={skyAutoMode}
-                  onChange={(event) => setSkyAutoMode(event.target.checked)}
-                />
-                Auto (weather + time)
-              </label>
-              <button
-                type="button"
-                className="sky-controls-reset"
-                onClick={handleResetSkySettings}
-              >
-                Reset
-              </button>
-            </div>
-            {SKY_SLIDERS.map((slider) => {
-              const value = manualSkySettings[slider.key];
-              return (
-                <label key={slider.key} className="sky-control-row">
-                  <span>{slider.label}</span>
+      {SHOW_SCENE_DEBUG_PANELS && (
+        <>
+          <div
+            className="sky-controls"
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerMove={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="sky-controls-toggle"
+              onClick={() => setSkyPanelOpen((open) => !open)}
+            >
+              {skyPanelOpen ? "Hide Sky Controls" : "Sky Controls"}
+            </button>
+            {skyPanelOpen && (
+              <div className="sky-controls-panel">
+                <div className="sky-controls-row">
+                  <label className="sky-controls-check">
+                    <input
+                      type="checkbox"
+                      checked={skyAutoMode}
+                      onChange={(event) => setSkyAutoMode(event.target.checked)}
+                    />
+                    Auto (weather + time)
+                  </label>
+                  <button
+                    type="button"
+                    className="sky-controls-reset"
+                    onClick={handleResetSkySettings}
+                  >
+                    Reset
+                  </button>
+                </div>
+                {SKY_SLIDERS.map((slider) => {
+                  const value = manualSkySettings[slider.key];
+                  return (
+                    <label key={slider.key} className="sky-control-row">
+                      <span>{slider.label}</span>
+                      <input
+                        type="range"
+                        min={slider.min}
+                        max={slider.max}
+                        step={slider.step}
+                        value={value}
+                        disabled={skyAutoMode}
+                        onChange={(event) =>
+                          handleSkySettingChange(
+                            slider.key,
+                            Number(event.target.value),
+                          )
+                        }
+                      />
+                      <output>{value.toFixed(slider.digits)}</output>
+                    </label>
+                  );
+                })}
+                {skyAutoMode ? (
+                  <p className="sky-controls-note">
+                    Auto mode uses live weather and time-of-day values. Disable
+                    to tune manually.
+                  </p>
+                ) : null}
+              </div>
+            )}
+          </div>
+          <div
+            className="lighting-controls"
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerMove={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="sky-controls-toggle"
+              onClick={() => setLightingPanelOpen((open) => !open)}
+            >
+              {lightingPanelOpen ? "Hide Lighting" : "Lighting Debug"}
+            </button>
+            {lightingPanelOpen && (
+              <div className="lighting-controls-panel">
+                <div className="sky-controls-row">
+                  <label className="sky-controls-check">
+                    <input
+                      type="checkbox"
+                      checked={lightingOverride}
+                      onChange={(e) => setLightingOverride(e.target.checked)}
+                    />
+                    Override
+                  </label>
+                  <button
+                    type="button"
+                    className="sky-controls-reset"
+                    onClick={handlePrintLighting}
+                  >
+                    Print to Console
+                  </button>
+                </div>
+
+                {(
+                  [
+                    {
+                      key: "hemiIntensity",
+                      label: "Hemi Int",
+                      min: 0,
+                      max: 3,
+                      step: 0.01,
+                      digits: 2,
+                    },
+                    {
+                      key: "sunIntensity",
+                      label: "Sun Int",
+                      min: 0,
+                      max: 3,
+                      step: 0.01,
+                      digits: 2,
+                    },
+                    {
+                      key: "exposure",
+                      label: "Exposure",
+                      min: 0,
+                      max: 3,
+                      step: 0.01,
+                      digits: 2,
+                    },
+                    {
+                      key: "saturationBoost",
+                      label: "Saturation",
+                      min: 0,
+                      max: 3,
+                      step: 0.01,
+                      digits: 2,
+                    },
+                    {
+                      key: "warmthShift",
+                      label: "Warmth",
+                      min: -0.1,
+                      max: 0.2,
+                      step: 0.001,
+                      digits: 3,
+                    },
+                    {
+                      key: "edgeStrength",
+                      label: "Edge Str",
+                      min: 0,
+                      max: 3,
+                      step: 0.01,
+                      digits: 2,
+                    },
+                    {
+                      key: "edgeThreshold",
+                      label: "Edge Thr",
+                      min: 0,
+                      max: 0.5,
+                      step: 0.005,
+                      digits: 3,
+                    },
+                    {
+                      key: "bloomStrength",
+                      label: "Bloom Str",
+                      min: 0,
+                      max: 2,
+                      step: 0.01,
+                      digits: 2,
+                    },
+                    {
+                      key: "bloomRadius",
+                      label: "Bloom Rad",
+                      min: 0,
+                      max: 2,
+                      step: 0.01,
+                      digits: 2,
+                    },
+                    {
+                      key: "bloomThreshold",
+                      label: "Bloom Thr",
+                      min: 0,
+                      max: 2,
+                      step: 0.01,
+                      digits: 2,
+                    },
+                  ] as const
+                ).map((s) => (
+                  <label key={s.key} className="sky-control-row">
+                    <span>{s.label}</span>
+                    <input
+                      type="range"
+                      min={s.min}
+                      max={s.max}
+                      step={s.step}
+                      value={lightingValues[s.key]}
+                      disabled={!lightingOverride}
+                      onChange={(e) =>
+                        handleLightingChange(s.key, Number(e.target.value))
+                      }
+                    />
+                    <output>
+                      {(lightingValues[s.key] as number).toFixed(s.digits)}
+                    </output>
+                  </label>
+                ))}
+
+                {(
+                  [
+                    { key: "hemiSkyColor", label: "Hemi Sky" },
+                    { key: "hemiGroundColor", label: "Hemi Gnd" },
+                    { key: "sunColor", label: "Sun Color" },
+                  ] as const
+                ).map((c) => (
+                  <label key={c.key} className="lighting-color-row">
+                    <span>{c.label}</span>
+                    <input
+                      type="color"
+                      value={lightingValues[c.key]}
+                      disabled={!lightingOverride}
+                      onChange={(e) =>
+                        handleLightingChange(c.key, e.target.value)
+                      }
+                    />
+                  </label>
+                ))}
+
+                <label className="lighting-select-row">
+                  <span>Tone Map</span>
+                  <select
+                    value={lightingValues.toneMapping}
+                    disabled={!lightingOverride}
+                    onChange={(e) =>
+                      handleLightingChange("toneMapping", Number(e.target.value))
+                    }
+                  >
+                    <option value={THREE.NoToneMapping}>None</option>
+                    <option value={THREE.LinearToneMapping}>Linear</option>
+                    <option value={THREE.ReinhardToneMapping}>Reinhard</option>
+                    <option value={THREE.ACESFilmicToneMapping}>ACES Filmic</option>
+                  </select>
+                </label>
+
+                <label className="sky-controls-check" style={{ marginTop: 6 }}>
                   <input
-                    type="range"
-                    min={slider.min}
-                    max={slider.max}
-                    step={slider.step}
-                    value={value}
-                    disabled={skyAutoMode}
-                    onChange={(event) =>
-                      handleSkySettingChange(
-                        slider.key,
-                        Number(event.target.value),
-                      )
+                    type="checkbox"
+                    checked={lightingValues.shadowsEnabled}
+                    disabled={!lightingOverride}
+                    onChange={(e) =>
+                      handleLightingChange("shadowsEnabled", e.target.checked)
                     }
                   />
-                  <output>{value.toFixed(slider.digits)}</output>
+                  Shadows
                 </label>
-              );
-            })}
-            {skyAutoMode ? (
-              <p className="sky-controls-note">
-                Auto mode uses live weather and time-of-day values. Disable to
-                tune manually.
-              </p>
-            ) : null}
+              </div>
+            )}
           </div>
-        )}
-      </div>
-      <div
-        className="lighting-controls"
-        onPointerDown={(event) => event.stopPropagation()}
-        onPointerMove={(event) => event.stopPropagation()}
-        onPointerUp={(event) => event.stopPropagation()}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <button
-          type="button"
-          className="sky-controls-toggle"
-          onClick={() => setLightingPanelOpen((open) => !open)}
-        >
-          {lightingPanelOpen ? "Hide Lighting" : "Lighting Debug"}
-        </button>
-        {lightingPanelOpen && (
-          <div className="lighting-controls-panel">
-            <div className="sky-controls-row">
-              <label className="sky-controls-check">
-                <input
-                  type="checkbox"
-                  checked={lightingOverride}
-                  onChange={(e) => setLightingOverride(e.target.checked)}
-                />
-                Override
-              </label>
-              <button
-                type="button"
-                className="sky-controls-reset"
-                onClick={handlePrintLighting}
-              >
-                Print to Console
-              </button>
-            </div>
-
-            {/* Sliders */}
-            {(
-              [
-                {
-                  key: "hemiIntensity",
-                  label: "Hemi Int",
-                  min: 0,
-                  max: 3,
-                  step: 0.01,
-                  digits: 2,
-                },
-                {
-                  key: "sunIntensity",
-                  label: "Sun Int",
-                  min: 0,
-                  max: 3,
-                  step: 0.01,
-                  digits: 2,
-                },
-                {
-                  key: "exposure",
-                  label: "Exposure",
-                  min: 0,
-                  max: 3,
-                  step: 0.01,
-                  digits: 2,
-                },
-                {
-                  key: "saturationBoost",
-                  label: "Saturation",
-                  min: 0,
-                  max: 3,
-                  step: 0.01,
-                  digits: 2,
-                },
-                {
-                  key: "warmthShift",
-                  label: "Warmth",
-                  min: -0.1,
-                  max: 0.2,
-                  step: 0.001,
-                  digits: 3,
-                },
-                {
-                  key: "edgeStrength",
-                  label: "Edge Str",
-                  min: 0,
-                  max: 3,
-                  step: 0.01,
-                  digits: 2,
-                },
-                {
-                  key: "edgeThreshold",
-                  label: "Edge Thr",
-                  min: 0,
-                  max: 0.5,
-                  step: 0.005,
-                  digits: 3,
-                },
-                {
-                  key: "bloomStrength",
-                  label: "Bloom Str",
-                  min: 0,
-                  max: 2,
-                  step: 0.01,
-                  digits: 2,
-                },
-                {
-                  key: "bloomRadius",
-                  label: "Bloom Rad",
-                  min: 0,
-                  max: 2,
-                  step: 0.01,
-                  digits: 2,
-                },
-                {
-                  key: "bloomThreshold",
-                  label: "Bloom Thr",
-                  min: 0,
-                  max: 2,
-                  step: 0.01,
-                  digits: 2,
-                },
-              ] as const
-            ).map((s) => (
-              <label key={s.key} className="sky-control-row">
-                <span>{s.label}</span>
-                <input
-                  type="range"
-                  min={s.min}
-                  max={s.max}
-                  step={s.step}
-                  value={lightingValues[s.key]}
-                  disabled={!lightingOverride}
-                  onChange={(e) =>
-                    handleLightingChange(s.key, Number(e.target.value))
-                  }
-                />
-                <output>
-                  {(lightingValues[s.key] as number).toFixed(s.digits)}
-                </output>
-              </label>
-            ))}
-
-            {/* Color pickers */}
-            {(
-              [
-                { key: "hemiSkyColor", label: "Hemi Sky" },
-                { key: "hemiGroundColor", label: "Hemi Gnd" },
-                { key: "sunColor", label: "Sun Color" },
-              ] as const
-            ).map((c) => (
-              <label key={c.key} className="lighting-color-row">
-                <span>{c.label}</span>
-                <input
-                  type="color"
-                  value={lightingValues[c.key]}
-                  disabled={!lightingOverride}
-                  onChange={(e) => handleLightingChange(c.key, e.target.value)}
-                />
-              </label>
-            ))}
-
-            {/* Tone mapping dropdown */}
-            <label className="lighting-select-row">
-              <span>Tone Map</span>
-              <select
-                value={lightingValues.toneMapping}
-                disabled={!lightingOverride}
-                onChange={(e) =>
-                  handleLightingChange("toneMapping", Number(e.target.value))
-                }
-              >
-                <option value={THREE.NoToneMapping}>None</option>
-                <option value={THREE.LinearToneMapping}>Linear</option>
-                <option value={THREE.ReinhardToneMapping}>Reinhard</option>
-                <option value={THREE.ACESFilmicToneMapping}>ACES Filmic</option>
-              </select>
-            </label>
-
-            {/* Shadows checkbox */}
-            <label className="sky-controls-check" style={{ marginTop: 6 }}>
-              <input
-                type="checkbox"
-                checked={lightingValues.shadowsEnabled}
-                disabled={!lightingOverride}
-                onChange={(e) =>
-                  handleLightingChange("shadowsEnabled", e.target.checked)
-                }
-              />
-              Shadows
-            </label>
-          </div>
-        )}
-      </div>
+        </>
+      )}
       {selectedShip && (
         <ShipInfoCard
           ship={selectedShip.ship}

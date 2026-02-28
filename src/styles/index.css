@@ -645,6 +645,16 @@ body {
   margin-bottom: 8px;
 }
 
+.ship-info-draggable {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.ship-info-draggable:active {
+  cursor: grabbing;
+}
+
 .ship-category {
   font-size: 11px;
   text-transform: uppercase;

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ShipData } from "../types/ais";
 import { getShipCategory, NAV_STATUS } from "../types/ais";
 import gsap from "gsap";
@@ -45,6 +45,17 @@ export function ShipInfoCard({
   onClose,
 }: ShipInfoCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const dragStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startLeft: number;
+    startTop: number;
+  } | null>(null);
+  const [dragPosition, setDragPosition] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
   const category = getShipCategory(ship.shipType);
 
   useEffect(() => {
@@ -56,6 +67,10 @@ export function ShipInfoCard({
       );
     }
   }, []);
+
+  useEffect(() => {
+    setDragPosition(null);
+  }, [ship.mmsi]);
 
   const handleClose = () => {
     if (cardRef.current) {
@@ -71,16 +86,18 @@ export function ShipInfoCard({
     }
   };
 
-  const cardLeft = clamp(
+  const autoCardLeft = clamp(
     x + 24,
     CARD_PADDING,
     Math.max(CARD_PADDING, sceneWidth - CARD_WIDTH - CARD_PADDING),
   );
-  const cardTop = clamp(
+  const autoCardTop = clamp(
     y - 96,
     CARD_PADDING,
     Math.max(CARD_PADDING, sceneHeight - CARD_HEIGHT - CARD_PADDING),
   );
+  const cardLeft = dragPosition?.left ?? autoCardLeft;
+  const cardTop = dragPosition?.top ?? autoCardTop;
   const cardCenterX = cardLeft + CARD_WIDTH / 2;
   const cardCenterY = cardTop + CARD_HEIGHT / 2;
   const dx = x - cardCenterX;
@@ -128,13 +145,68 @@ export function ShipInfoCard({
     pointerEvents: "auto",
   };
 
+  const isNoDragTarget = (target: EventTarget | null): boolean =>
+    target instanceof HTMLElement &&
+    Boolean(target.closest("button, a, input, select, textarea"));
+
+  const handleCardPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    if (isNoDragTarget(event.target)) return;
+    dragStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startLeft: cardLeft,
+      startTop: cardTop,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleCardPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const dragState = dragStateRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    event.stopPropagation();
+    const nextLeft = clamp(
+      dragState.startLeft + (event.clientX - dragState.startX),
+      CARD_PADDING,
+      Math.max(CARD_PADDING, sceneWidth - CARD_WIDTH - CARD_PADDING),
+    );
+    const nextTop = clamp(
+      dragState.startTop + (event.clientY - dragState.startY),
+      CARD_PADDING,
+      Math.max(CARD_PADDING, sceneHeight - CARD_HEIGHT - CARD_PADDING),
+    );
+    setDragPosition({ left: nextLeft, top: nextTop });
+  };
+
+  const handleCardPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const dragState = dragStateRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    dragStateRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
   return (
     <div className="ship-info-overlay" style={{ width: sceneWidth, height: sceneHeight }}>
       <svg className="ship-info-pointer" viewBox={`0 0 ${sceneWidth} ${sceneHeight}`}>
         <polygon points={pointerPoints} className="ship-info-pointer-shaft" />
       </svg>
-      <div ref={cardRef} style={cardStyle} className="ship-info-card" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-        <div className="ship-info-header" style={{ borderLeftColor: CATEGORY_COLORS[category] }}>
+      <div
+        ref={cardRef}
+        style={cardStyle}
+        className="ship-info-card ship-info-draggable"
+        onPointerDown={handleCardPointerDown}
+        onPointerMove={handleCardPointerMove}
+        onPointerUp={handleCardPointerUp}
+        onPointerCancel={handleCardPointerUp}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className="ship-info-header"
+          style={{ borderLeftColor: CATEGORY_COLORS[category] }}
+        >
           <span className="ship-category">{CATEGORY_LABELS[category]}</span>
           <button className="ship-info-close" onClick={handleClose}>
             &times;

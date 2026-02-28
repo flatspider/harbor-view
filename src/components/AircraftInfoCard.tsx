@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import type { AircraftData } from "../types/aircraft";
 
@@ -33,6 +33,17 @@ export function AircraftInfoCard({
   onClose,
 }: AircraftInfoCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const dragStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startLeft: number;
+    startTop: number;
+  } | null>(null);
+  const [dragPosition, setDragPosition] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
 
   useEffect(() => {
     if (cardRef.current) {
@@ -43,6 +54,10 @@ export function AircraftInfoCard({
       );
     }
   }, []);
+
+  useEffect(() => {
+    setDragPosition(null);
+  }, [aircraft.hex]);
 
   const handleClose = () => {
     if (cardRef.current) {
@@ -58,32 +73,83 @@ export function AircraftInfoCard({
     }
   };
 
+  const autoLeft = clamp(
+    x + 20,
+    CARD_PADDING,
+    Math.max(CARD_PADDING, sceneWidth - CARD_WIDTH - CARD_PADDING),
+  );
+  const autoTop = clamp(
+    y - 60,
+    CARD_PADDING,
+    Math.max(CARD_PADDING, sceneHeight - CARD_HEIGHT - CARD_PADDING),
+  );
   const cardStyle: React.CSSProperties = {
     position: "absolute",
-    left: clamp(
-      x + 20,
-      CARD_PADDING,
-      Math.max(CARD_PADDING, sceneWidth - CARD_WIDTH - CARD_PADDING),
-    ),
-    top: clamp(
-      y - 60,
-      CARD_PADDING,
-      Math.max(CARD_PADDING, sceneHeight - CARD_HEIGHT - CARD_PADDING),
-    ),
+    left: dragPosition?.left ?? autoLeft,
+    top: dragPosition?.top ?? autoTop,
     zIndex: 100,
   };
 
   const callsign = aircraft.flight.trim() || `ICAO ${aircraft.hex.toUpperCase()}`;
 
+  const isNoDragTarget = (target: EventTarget | null): boolean =>
+    target instanceof HTMLElement &&
+    Boolean(target.closest("button, a, input, select, textarea"));
+
+  const handleCardPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    if (isNoDragTarget(event.target)) return;
+    dragStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startLeft: dragPosition?.left ?? autoLeft,
+      startTop: dragPosition?.top ?? autoTop,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleCardPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const dragState = dragStateRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    event.stopPropagation();
+    const nextLeft = clamp(
+      dragState.startLeft + (event.clientX - dragState.startX),
+      CARD_PADDING,
+      Math.max(CARD_PADDING, sceneWidth - CARD_WIDTH - CARD_PADDING),
+    );
+    const nextTop = clamp(
+      dragState.startTop + (event.clientY - dragState.startY),
+      CARD_PADDING,
+      Math.max(CARD_PADDING, sceneHeight - CARD_HEIGHT - CARD_PADDING),
+    );
+    setDragPosition({ left: nextLeft, top: nextTop });
+  };
+
+  const handleCardPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const dragState = dragStateRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    dragStateRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
   return (
     <div
       ref={cardRef}
       style={cardStyle}
-      className="ship-info-card"
-      onPointerDown={(e) => e.stopPropagation()}
+      className="ship-info-card ship-info-draggable"
+      onPointerDown={handleCardPointerDown}
+      onPointerMove={handleCardPointerMove}
+      onPointerUp={handleCardPointerUp}
+      onPointerCancel={handleCardPointerUp}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="ship-info-header" style={{ borderLeftColor: "#f5b66b" }}>
+      <div
+        className="ship-info-header"
+        style={{ borderLeftColor: "#f5b66b" }}
+      >
         <span className="ship-category">Aircraft</span>
         <button className="ship-info-close" onClick={handleClose}>
           &times;

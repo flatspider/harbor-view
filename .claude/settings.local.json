@@ -69,7 +69,8 @@
       "Bash(git ls-files:*)",
       "Bash(git ls-tree:*)",
       "mcp__playwright__browser_snapshot",
-      "mcp__playwright__browser_resize"
+      "mcp__playwright__browser_resize",
+      "Bash(gh secret:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

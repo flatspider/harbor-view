@@ -1,0 +1,32 @@
+{
+  "assigned_to": null,
+  "branch_links": [],
+  "comment_count": 1,
+  "complexity": null,
+  "created_at": "2026-02-28T17:50:56Z",
+  "created_by": "agent:codex-gpt5",
+  "custom_fields": {},
+  "description": null,
+  "done_at": "2026-02-28T17:54:24Z",
+  "evidence_refs": [
+    {
+      "id": "ev_01KJJP65J0EJ3VGG2JNTT25NZ2",
+      "role": "review",
+      "source_type": "comment"
+    }
+  ],
+  "id": "task_01KJJNZY5YJAYS5NGFXEAA8B4F",
+  "last_event_id": "ev_01KJJP69PS9PYARSYMKV411GYH",
+  "last_status_changed_at": "2026-02-28T17:54:24Z",
+  "priority": "medium",
+  "relationships_out": [],
+  "reopened_count": 0,
+  "schema_version": 1,
+  "short_id": "HAR-84",
+  "status": "done",
+  "tags": null,
+  "title": "Remove southern block artifact from harbor land geojson and collisions",
+  "type": "task",
+  "updated_at": "2026-02-28T17:54:24Z",
+  "urgency": null
+}

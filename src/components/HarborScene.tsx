@@ -1178,14 +1178,19 @@ export function HarborScene({
           return;
         }
         const zoomByClass = {
-          light: 54,
-          medium: 66,
-          heavy: 78,
+          light: 86,
+          medium: 102,
+          heavy: 118,
         } as const;
+        const speedZoomBoost = THREE.MathUtils.clamp(
+          markerData.aircraft.gs * 0.08,
+          0,
+          34,
+        );
         const zoomDist = THREE.MathUtils.clamp(
-          zoomByClass[markerData.sizeClass],
-          Math.max(46, controls.minDistance + 8),
-          Math.max(controls.minDistance + 8, controls.maxDistance * 0.5),
+          zoomByClass[markerData.sizeClass] + speedZoomBoost,
+          Math.max(64, controls.minDistance + 14),
+          Math.max(controls.minDistance + 14, controls.maxDistance * 0.62),
         );
         const azimuth = controls.getAzimuthalAngle();
         const sinP = Math.sin(INITIAL_POLAR_ANGLE);

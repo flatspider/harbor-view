@@ -10,7 +10,7 @@ export interface HarborLabel {
   priority: number;
   offsetX?: number;
   offsetY?: number;
-  style?: "emoji";
+  style?: "emoji" | "emoji-xl";
 }
 
 export const HARBOR_LABELS: HarborLabel[] = [
@@ -18,7 +18,7 @@ export const HARBOR_LABELS: HarborLabel[] = [
   { id: "east-river", text: "East River", lat: 40.725, lon: -73.982, kind: "water", priority: 9, offsetX: 148, offsetY: -10 },
   { id: "hudson", text: "Hudson", lat: 40.742, lon: -74.028, kind: "water", priority: 8, offsetX: 18 },
   { id: "narrows", text: "The Narrows", lat: 40.61, lon: -74.04, kind: "water", priority: 10, offsetY: -8 },
-  { id: "liberty", text: "\u{1F5FD}", lat: 40.6892, lon: -74.0445, kind: "landmark", priority: 12, offsetY: -16, style: "emoji" },
+  { id: "liberty", text: "\u{1F5FD}", lat: 40.6892, lon: -74.0445, kind: "landmark", priority: 12, offsetY: -18, style: "emoji-xl" },
   { id: "gov-island", text: "Governors Island", lat: 40.6897, lon: -74.0168, kind: "landmark", priority: 11, offsetY: -10 },
   { id: "verrazzano", text: "Verrazzano Bridge", lat: 40.6066, lon: -74.0447, kind: "landmark", priority: 11, offsetY: -10 },
   { id: "ambrose", text: "Ambrose Channel", lat: 40.53, lon: -73.98, kind: "landmark", priority: 7, offsetY: -8 },
@@ -58,7 +58,8 @@ export function projectLabels(
     const x = ((projected.x + 1) * 0.5) * container.clientWidth + (label.offsetX ?? 0);
     const y = ((-projected.y + 1) * 0.5) * container.clientHeight + (label.offsetY ?? 0);
     let occluded = false;
-    if (occlusionTargets && occlusionTargets.length > 0) {
+    const ignoreOcclusion = label.id === "liberty";
+    if (!ignoreOcclusion && occlusionTargets && occlusionTargets.length > 0) {
       const toLabel = world.clone().sub(camera.position);
       const labelDistance = toLabel.length();
       if (labelDistance > 0.001) {

@@ -506,6 +506,16 @@ body {
   text-shadow: 0 2px 6px rgba(5, 12, 24, 0.75);
 }
 
+.harbor-label-emoji-xl {
+  font-size: 72px;
+  line-height: 1;
+  letter-spacing: 0;
+  -webkit-text-stroke: 0;
+  text-shadow:
+    0 3px 10px rgba(5, 12, 24, 0.86),
+    0 0 16px rgba(170, 230, 245, 0.35);
+}
+
 /* ============================
    Wave Overlays
    ============================ */

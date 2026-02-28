@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 import type { HarborEnvironment } from "../types/environment";
-import { WORLD_WIDTH, WORLD_DEPTH, moodFromForecast } from "./constants";
+import { WORLD_WIDTH, WORLD_DEPTH, moodFromForecast, DEMO_LOCK } from "./constants";
 
 interface SkyUniforms {
   turbidity: { value: number };
@@ -32,7 +32,12 @@ const SKY_DEFAULTS: SkySettings = {
   exposure: 0.72,
 };
 
+/** Demo-lock sun: elevation 40° (late morning), azimuth 220° (southwest). */
+const DEMO_SUN_ELEVATION = 52;
+const DEMO_SUN_AZIMUTH = 220;
+
 function getTimeSunAngles(night: boolean): { elevation: number; azimuth: number } {
+  if (DEMO_LOCK) return { elevation: DEMO_SUN_ELEVATION, azimuth: DEMO_SUN_AZIMUTH };
   const now = new Date();
   const hours = now.getHours() + now.getMinutes() / 60;
   const daylightT = THREE.MathUtils.clamp((hours - 6) / 12, 0, 1);
@@ -75,6 +80,17 @@ export function getDefaultSkySettings(): SkySettings {
 }
 
 function getAutoSkySettings(night: boolean, env: HarborEnvironment): SkySettings {
+  if (DEMO_LOCK) {
+    return clampSettings({
+      turbidity: 8,
+      rayleigh: 2.8,
+      mieCoefficient: 0.005,
+      mieDirectionalG: 0.74,
+      elevation: DEMO_SUN_ELEVATION,
+      azimuth: DEMO_SUN_AZIMUTH,
+      exposure: 0.82,
+    });
+  }
   const mood = moodFromForecast(env.forecastSummary);
   const cloudiness = mood === "rain" ? 0.95 : mood === "overcast" ? 0.72 : mood === "fog" ? 0.86 : 0.25;
   const windFactor = THREE.MathUtils.clamp(env.windSpeedMph / 35, 0, 1);

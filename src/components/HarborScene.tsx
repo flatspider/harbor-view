@@ -1264,6 +1264,22 @@ export function HarborScene({
     const loopToken = frameLoopTokenRef.current + 1;
     frameLoopTokenRef.current = loopToken;
 
+    const restoreViewportAndState = () => {
+      const rendererInstance = rendererRef.current;
+      const sceneMount = sceneRef.current;
+      if (!rendererInstance || !sceneMount) return;
+      const width = sceneMount.clientWidth;
+      const height = sceneMount.clientHeight;
+      if (width <= 0 || height <= 0) return;
+      rendererInstance.setViewport(0, 0, width, height);
+      rendererInstance.setScissor(0, 0, width, height);
+      rendererInstance.setScissorTest(false);
+      rendererInstance.state.buffers.depth.setMask(true);
+      rendererInstance.state.buffers.depth.setTest(true);
+      rendererInstance.state.buffers.color.setMask(true);
+      rendererInstance.state.setBlending(THREE.NoBlending);
+    };
+
     const animate = (time: number) => {
       if (frameLoopTokenRef.current !== loopToken) return;
       if (
@@ -1272,6 +1288,7 @@ export function HarborScene({
         !rendererRef.current
       )
         return;
+      restoreViewportAndState();
       const t = time * 0.001;
       const env = environmentRef.current;
 
@@ -1579,23 +1596,9 @@ export function HarborScene({
 
       if (composerRef.current) {
         composerRef.current.render();
-        // The bloom pass's final blend material leaves the GPU with
-        // depthMask=false, depthTest=false, blending=Additive.
-        // renderer.state.reset() only clears Three.js's internal *cache*
-        // to defaults — it does NOT issue GL calls to actually restore
-        // the GPU state. So on the next frame, when RenderPass calls
-        // renderer.clear(), Three.js sees its cache says depthMask=true
-        // (the default) and skips the gl.depthMask(true) call. But the
-        // GPU still has depthMask=false → depth buffer never clears →
-        // stale depth values leak between frames → flicker on camera move.
-        //
-        // Fix: explicitly set the GPU back to sane defaults, THEN reset
-        // the cache so it matches reality.
-        const gl = rendererRef.current.getContext();
-        gl.depthMask(true);
-        gl.enable(gl.DEPTH_TEST);
-        gl.disable(gl.BLEND);
-        rendererRef.current.state.reset();
+        // Composer/water reflection passes can leave viewport/scissor/state dirty.
+        // Restore a full-canvas frame state before the next RAF tick.
+        restoreViewportAndState();
       } else {
         rendererRef.current.clear();
         rendererRef.current.render(sceneInstanceRef.current, cameraRef.current);

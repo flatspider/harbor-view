@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { Water } from "three/examples/jsm/objects/Water.js";
 import type { HarborEnvironment } from "../types/environment";
 import { landPolygonRings, isPointOnLand } from "./land";
-import { TILE_SIZE, WORLD_WIDTH, WORLD_DEPTH, latLonToWorld, worldToLonLat, setVisibleStable, type WaterTile } from "./constants";
+import { TILE_SIZE, WORLD_WIDTH, WORLD_DEPTH, DEMO_LOCK, latLonToWorld, worldToLonLat, setVisibleStable, type WaterTile } from "./constants";
 
 interface ShaderWaterTile {
   mesh: Water;
@@ -85,7 +85,7 @@ const FORCE_TEST_CURRENT = false;
 const FORCED_CURRENT_KNOTS = 15;
 const FORCED_CURRENT_DIRECTION_DEG = 0;
 const UV_DRIFT_PER_KNOT = 0.00135;
-const DAY_WATER_SUN_DIRECTION = new THREE.Vector3(-400, 300, -350).normalize();
+const DAY_WATER_SUN_DIRECTION = new THREE.Vector3(-400, 380, -350).normalize();
 const NIGHT_WATER_SUN_DIRECTION = new THREE.Vector3(-220, 260, -180).normalize();
 const DAY_WATER_SUN_COLOR = "#ffe0b2";
 const NIGHT_WATER_SUN_COLOR = "#9caec9";
@@ -421,12 +421,25 @@ export function createWaterTiles(scene: THREE.Scene): WaterTile[] {
   // render. A full state.reset() is too aggressive — it nukes framebuffer
   // bindings and texture unit tracking, which kills the reflection texture.
   const _origOnBeforeRender = water.onBeforeRender;
+  const savedViewport = new THREE.Vector4();
+  const savedScissor = new THREE.Vector4();
   water.onBeforeRender = function (renderer, scene, camera, geometry, material, group) {
+    renderer.getViewport(savedViewport);
+    renderer.getScissor(savedScissor);
+    const savedScissorTest = renderer.getScissorTest();
+
     _origOnBeforeRender.call(this, renderer, scene, camera, geometry, material, group);
+
+    // Water performs a nested render-to-texture pass; hard-restore
+    // viewport/scissor and fixed-function state for the main frame.
+    renderer.setViewport(savedViewport);
+    renderer.setScissor(savedScissor);
+    renderer.setScissorTest(savedScissorTest);
     // Sync GPU depth/blend state AND Three.js's cache so the main scene
     // render doesn't skip GL calls based on stale cache values.
     renderer.state.buffers.depth.setMask(true);
     renderer.state.buffers.depth.setTest(true);
+    renderer.state.buffers.color.setMask(true);
     renderer.state.setBlending(THREE.NoBlending);
   };
 
@@ -519,7 +532,8 @@ export function animateWaterTiles(
   const knotEnergy = THREE.MathUtils.clamp(effectiveEnv.currentSpeedKnots / 16, 0, 6);
   const currentEnergy = THREE.MathUtils.clamp(centerSpeed * 0.55 + shear * 0.38 + knotEnergy * 0.22, 0, 2.6);
   const swellScale = 0.32 + waveIntensity * 0.54 - currentEnergy * 0.06;
-  const distortionScale = 4.2 + waveIntensity * 7.6 + effectiveEnv.windSpeedMph * 0.06 + currentEnergy * 5.8;
+  let distortionScale = 4.2 + waveIntensity * 7.6 + effectiveEnv.windSpeedMph * 0.06 + currentEnergy * 5.8;
+  if (DEMO_LOCK) distortionScale = Math.min(distortionScale, 8.0);
   // Soft teal base (#4E8FA6) with subtle temperature modulation
   const waterTempNorm = THREE.MathUtils.clamp((env.seaSurfaceTempC - 2) / 22, 0, 1);
   const waterHue = 0.54 - waterTempNorm * 0.02;

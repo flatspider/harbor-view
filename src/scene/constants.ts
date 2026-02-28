@@ -103,7 +103,14 @@ export function degToVectorOnWater(deg: number): THREE.Vector2 {
   return new THREE.Vector2(Math.sin(radians), Math.cos(radians));
 }
 
+/**
+ * Demo-lock: when true, forces permanent daytime with fixed sun position.
+ * Prevents all time-of-day and weather-driven lighting changes.
+ */
+export const DEMO_LOCK = true;
+
 export function isNightTime(): boolean {
+  if (DEMO_LOCK) return false;
   const hour = new Date().getHours();
   return hour < 6 || hour >= 19;
 }

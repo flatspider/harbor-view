@@ -74,6 +74,7 @@ import {
 import { loadContainerShipPrototype } from "../scene/containerShipModel";
 import { loadPassengerFerryPrototype } from "../scene/passengerFerryModel";
 import { loadSmallBoatPrototype } from "../scene/smallBoatModel";
+import { applyNightToonLook } from "../scene/modelLook";
 
 interface HarborSceneProps {
   ships: Map<number, ShipData>;
@@ -348,6 +349,31 @@ function createFastestShipIndicator(): THREE.Group {
   return group;
 }
 
+function applyNightLookToObject(object: THREE.Object3D, enabled: boolean): void {
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    const material = child.material;
+    if (Array.isArray(material)) {
+      for (const mat of material) {
+        if (mat instanceof THREE.MeshToonMaterial) applyNightToonLook(mat, enabled);
+      }
+      return;
+    }
+    if (material instanceof THREE.MeshToonMaterial) {
+      applyNightToonLook(material, enabled);
+    }
+  });
+}
+
+function applyNightLookToMarkers(
+  shipMarkers: Map<number, ShipMesh>,
+  aircraftMarkers: Map<string, AircraftMarker>,
+  enabled: boolean,
+): void {
+  for (const marker of shipMarkers.values()) applyNightLookToObject(marker, enabled);
+  for (const marker of aircraftMarkers.values()) applyNightLookToObject(marker, enabled);
+}
+
 export function HarborScene({
   ships,
   aircraft,
@@ -405,6 +431,8 @@ export function HarborScene({
   const [shipVisualAssetsRevision, setShipVisualAssetsRevision] = useState(0);
   const [aircraftVisualAssetsRevision, setAircraftVisualAssetsRevision] =
     useState(0);
+  const shipVisualAssetsRevisionRef = useRef(shipVisualAssetsRevision);
+  const aircraftVisualAssetsRevisionRef = useRef(aircraftVisualAssetsRevision);
   const [skyAutoMode, setSkyAutoMode] = useState(true);
   const [skyPanelOpen, setSkyPanelOpen] = useState(false);
   const [manualSkySettings, setManualSkySettings] = useState<SkySettings>(() =>
@@ -543,6 +571,14 @@ export function HarborScene({
   useEffect(() => {
     lightingValuesRef.current = lightingValues;
   }, [lightingValues]);
+
+  useEffect(() => {
+    shipVisualAssetsRevisionRef.current = shipVisualAssetsRevision;
+  }, [shipVisualAssetsRevision]);
+
+  useEffect(() => {
+    aircraftVisualAssetsRevisionRef.current = aircraftVisualAssetsRevision;
+  }, [aircraftVisualAssetsRevision]);
 
   const handleLightingChange = useCallback(
     (key: string, value: number | string | boolean) => {
@@ -1075,9 +1111,13 @@ export function HarborScene({
     let nextNightCheck = performance.now();
     let cachedNight = isNightTime();
     let appliedFerryNight = cachedNight;
+    let appliedModelNight = cachedNight;
+    let appliedShipVisualRevision = shipVisualAssetsRevisionRef.current;
+    let appliedAircraftVisualRevision = aircraftVisualAssetsRevisionRef.current;
     let nextSkyUpdate = 0;
     let cachedSkySettings: ReturnType<typeof animateSky> | null = null;
     setFerryRouteNight(appliedFerryNight);
+    applyNightLookToMarkers(shipMarkers, aircraftMarkersRef.current, cachedNight);
     const loopToken = frameLoopTokenRef.current + 1;
     frameLoopTokenRef.current = loopToken;
 
@@ -1193,6 +1233,22 @@ export function HarborScene({
       if (cachedNight !== appliedFerryNight) {
         setFerryRouteNight(cachedNight);
         appliedFerryNight = cachedNight;
+      }
+      const latestShipVisualRevision = shipVisualAssetsRevisionRef.current;
+      const latestAircraftVisualRevision = aircraftVisualAssetsRevisionRef.current;
+      if (
+        cachedNight !== appliedModelNight ||
+        latestShipVisualRevision !== appliedShipVisualRevision ||
+        latestAircraftVisualRevision !== appliedAircraftVisualRevision
+      ) {
+        applyNightLookToMarkers(
+          shipMarkers,
+          aircraftMarkersRef.current,
+          cachedNight,
+        );
+        appliedModelNight = cachedNight;
+        appliedShipVisualRevision = latestShipVisualRevision;
+        appliedAircraftVisualRevision = latestAircraftVisualRevision;
       }
       const zoomProgress = THREE.MathUtils.clamp(
         (cameraDistance - controls.minDistance) /

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { convertToToonMaterial } from "./convertToToon";
+import { captureBaseToonLook } from "./modelLook";
 
 interface PassengerFerryMetrics {
   length: number;
@@ -30,18 +31,27 @@ function applyToonFerryMaterial(mesh: THREE.Mesh): void {
 
     const toon = convertToToonMaterial(source);
 
-    // Orange-lane hue correction on the toon color
-    toon.color.getHSL(_hsl);
-    let h = _hsl.h;
-    let s = _hsl.s;
-    let l = _hsl.l;
-    if ((h < 0.04 || h > 0.96) && s > 0.25) h = 0.085;
-    else if (h >= 0.04 && h <= 0.2) h = THREE.MathUtils.lerp(h, 0.1, 0.65);
-    s = Math.min(1, s * 1.18 + 0.06);
-    l = Math.min(0.68, l * 1.12 + 0.05);
-    toon.color.setHSL(h, s, l);
-    toon.emissive.copy(toon.color);
-    toon.emissiveIntensity = 0.15;
+    // Apply hue correction only when no texture map is present.
+    if (!toon.map) {
+      toon.color.getHSL(_hsl);
+      let h = _hsl.h;
+      let s = _hsl.s;
+      let l = _hsl.l;
+      if ((h < 0.04 || h > 0.96) && s > 0.25) h = 0.085;
+      else if (h >= 0.04 && h <= 0.2) h = THREE.MathUtils.lerp(h, 0.1, 0.65);
+      s = Math.min(1, s * 1.1 + 0.04);
+      l = Math.min(0.62, l * 1.04 + 0.01);
+      toon.color.setHSL(h, s, l);
+    }
+    if (toon.map) {
+      toon.emissive.setRGB(1, 1, 1);
+      toon.emissiveMap = toon.map;
+      toon.emissiveIntensity = 0.2;
+    } else {
+      toon.emissive.copy(toon.color);
+      toon.emissiveIntensity = 0.05;
+    }
+    captureBaseToonLook(toon);
     toon.needsUpdate = true;
 
     toon.userData[PASSENGER_FERRY_STYLED_MATERIAL_KEY] = true;

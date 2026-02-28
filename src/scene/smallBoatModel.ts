@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { convertToToonMaterial } from "./convertToToon";
+import { captureBaseToonLook } from "./modelLook";
 
 interface SmallBoatMetrics {
   length: number;
@@ -31,14 +32,23 @@ function applyToonSmallBoatMaterial(mesh: THREE.Mesh): void {
     }
 
     const toon = convertToToonMaterial(source);
-    toon.color.getHSL(_hsl);
-    toon.color.setHSL(
-      _hsl.h,
-      Math.min(1, _hsl.s * 1.08 + 0.03),
-      Math.min(0.72, _hsl.l * 1.12 + 0.04),
-    );
-    toon.emissive.copy(toon.color);
-    toon.emissiveIntensity = 0.14;
+    if (!toon.map) {
+      toon.color.getHSL(_hsl);
+      toon.color.setHSL(
+        _hsl.h,
+        Math.min(1, _hsl.s * 1.06 + 0.02),
+        Math.min(0.64, _hsl.l * 1.05 + 0.01),
+      );
+    }
+    if (toon.map) {
+      toon.emissive.setRGB(1, 1, 1);
+      toon.emissiveMap = toon.map;
+      toon.emissiveIntensity = 0.2;
+    } else {
+      toon.emissive.copy(toon.color);
+      toon.emissiveIntensity = 0.05;
+    }
+    captureBaseToonLook(toon);
     toon.needsUpdate = true;
     toon.userData[SMALL_BOAT_STYLED_MATERIAL_KEY] = true;
 

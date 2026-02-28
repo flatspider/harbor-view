@@ -152,7 +152,7 @@ export async function loadFerryRoutes(scene: THREE.Scene, signal: AbortSignal): 
             transparent: true,
             dashSize: 18,
             gapSize: 12,
-            depthTest: false,
+            depthTest: true,
             depthWrite: false,
             toneMapped: false,
           });

@@ -5,6 +5,7 @@ import { createAirplaneModelInstance } from "./airplaneModel";
 import type { AirplanePrototypeSet, AirplaneVariant } from "./airplaneModel";
 import { latLonToWorld, WORLD_UNITS_PER_METER, PERF_DEBUG } from "./constants";
 import { toonGradient } from "./toonGradient";
+import { captureBaseToonLook } from "./modelLook";
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
 
@@ -67,11 +68,23 @@ function createProceduralAirplaneGroup(sizeClass: AircraftSizeClass): THREE.Grou
   const bodyMaterial = new THREE.MeshToonMaterial({
     color: bodyColor,
     gradientMap: toonGradient,
+    transparent: false,
+    opacity: 1,
+    depthWrite: true,
+    depthTest: true,
+    side: THREE.FrontSide,
   });
   const accentMaterial = new THREE.MeshToonMaterial({
     color: accentColor,
     gradientMap: toonGradient,
+    transparent: false,
+    opacity: 1,
+    depthWrite: true,
+    depthTest: true,
+    side: THREE.FrontSide,
   });
+  captureBaseToonLook(bodyMaterial);
+  captureBaseToonLook(accentMaterial);
 
   // Fuselage — elongated cylinder along Z axis
   const fuselageLength = 5 * scale;

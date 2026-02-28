@@ -88,8 +88,8 @@ export function animateAtmosphere(
   }
 
   // Lighting — moonlight modulates hemisphere intensity at night
-  hemiLight.intensity = night ? 0.34 + env.moonIllumination * 0.16 : mood === "overcast" ? 0.76 : 0.92;
-  sunLight.intensity = night ? 0.2 : mood === "rain" ? 0.45 : mood === "overcast" ? 0.82 : 1.25;
+  hemiLight.intensity = night ? 0.42 + env.moonIllumination * 0.2 : mood === "overcast" ? 0.76 : 0.92;
+  sunLight.intensity = night ? 0.3 : mood === "rain" ? 0.45 : mood === "overcast" ? 0.82 : 1.25;
 
   // Wind particles
   if (windParticles) {

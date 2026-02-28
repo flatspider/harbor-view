@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import type { AircraftSizeClass } from "../types/aircraft";
 import { convertToToonMaterial } from "./convertToToon";
+import { captureBaseToonLook } from "./modelLook";
 
 interface AirplaneMetrics {
   length: number;
@@ -41,6 +42,17 @@ const TARGET_LENGTH_BY_SIZE: Record<AircraftSizeClass, number> = {
 
 let airplaneLoadPromise: Promise<AirplanePrototypeSet> | null = null;
 
+function enforceOpaqueMaterial(material: THREE.Material): THREE.Material {
+  material.transparent = false;
+  material.opacity = 1;
+  material.depthWrite = true;
+  material.depthTest = true;
+  material.alphaTest = 0;
+  material.side = THREE.FrontSide;
+  material.needsUpdate = true;
+  return material;
+}
+
 function normalizePrototype(prototype: THREE.Object3D): AirplaneMetrics {
   prototype.updateMatrixWorld(true);
 
@@ -71,13 +83,14 @@ function normalizePrototype(prototype: THREE.Object3D): AirplaneMetrics {
     // Convert PBR materials to toon
     const swapMat = (source: THREE.Material): THREE.MeshToonMaterial => {
       const toon = convertToToonMaterial(source);
+      captureBaseToonLook(toon);
       if (source !== toon) source.dispose();
       return toon;
     };
     if (Array.isArray(child.material)) {
-      child.material = child.material.map(swapMat);
+      child.material = child.material.map((material) => enforceOpaqueMaterial(swapMat(material)));
     } else {
-      child.material = swapMat(child.material);
+      child.material = enforceOpaqueMaterial(swapMat(child.material));
     }
   });
 

@@ -1357,11 +1357,19 @@ export function HarborScene({
       }
 
       if (sceneRef.current && cameraRef.current) {
+        const labelOcclusionTargets: THREE.Object3D[] = [];
+        for (const marker of shipMarkers.values()) {
+          if (marker.visible) labelOcclusionTargets.push(marker);
+        }
+        for (const marker of aircraftMarkersRef.current.values()) {
+          if (marker.visible) labelOcclusionTargets.push(marker);
+        }
         projectLabels(
           cameraRef.current,
           sceneRef.current,
           labelElementsRef.current,
           labelSizes,
+          labelOcclusionTargets,
         );
       }
 

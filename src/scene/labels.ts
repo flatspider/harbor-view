@@ -30,7 +30,10 @@ export function projectLabels(
   container: HTMLDivElement,
   labelElements: Map<string, HTMLDivElement>,
   labelSizes: Map<string, { width: number; height: number }>,
+  occlusionTargets?: THREE.Object3D[],
 ): void {
+  const OCCLUDED_OPACITY = 0.2;
+  const raycaster = new THREE.Raycaster();
   const placedRects: Array<{ left: number; right: number; top: number; bottom: number }> = [];
   const overlapPadding = 10;
   const isOverlapping = (
@@ -48,18 +51,30 @@ export function projectLabels(
     const world = latLonToWorld(label.lat, label.lon);
     world.y = 8;
     const projected = world.project(camera);
-    const visible = projected.z < 1 && projected.z > -1;
-    if (!visible) return { label, el, visible: false, x: 0, y: 0 };
+    const inFrustum = projected.z < 1 && projected.z > -1;
+    if (!inFrustum) return { label, el, state: "hidden" as const, x: 0, y: 0 };
+
     const x = ((projected.x + 1) * 0.5) * container.clientWidth + (label.offsetX ?? 0);
     const y = ((-projected.y + 1) * 0.5) * container.clientHeight + (label.offsetY ?? 0);
-    return { label, el, visible: true, x, y };
+    let occluded = false;
+    if (occlusionTargets && occlusionTargets.length > 0) {
+      const toLabel = world.clone().sub(camera.position);
+      const labelDistance = toLabel.length();
+      if (labelDistance > 0.001) {
+        raycaster.set(camera.position, toLabel.multiplyScalar(1 / labelDistance));
+        raycaster.far = Math.max(0, labelDistance - 0.5);
+        const hits = raycaster.intersectObjects(occlusionTargets, true);
+        if (hits.length > 0) occluded = true;
+      }
+    }
+    return { label, el, state: occluded ? ("occluded" as const) : ("visible" as const), x, y };
   })
     .filter((entry): entry is NonNullable<typeof entry> => entry != null)
     .sort((a, b) => b.label.priority - a.label.priority);
 
   for (const entry of projectedLabels) {
-    const { label, el, x, y, visible } = entry;
-    if (!visible) {
+    const { label, el, x, y, state } = entry;
+    if (state === "hidden") {
       el.style.opacity = "0";
       continue;
     }
@@ -79,6 +94,6 @@ export function projectLabels(
     }
     placedRects.push(rect);
     el.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
-    el.style.opacity = "1";
+    el.style.opacity = state === "occluded" ? String(OCCLUDED_OPACITY) : "1";
   }
 }

@@ -11,6 +11,7 @@ import type { AircraftData } from "../types/aircraft";
 import type { HarborEnvironment } from "../types/environment";
 import { ShipInfoCard } from "./ShipInfoCard";
 import { FerryRouteInfoCard } from "./FerryRouteInfoCard";
+import { AircraftInfoCard } from "./AircraftInfoCard";
 import { GhibliEdgeShader } from "../scene/ghibliEdgeShader";
 import { GhibliColorShader } from "../scene/ghibliColorShader";
 
@@ -39,6 +40,8 @@ import { reconcileShips, animateShips, sanitizeShipSpeedKnots } from "../scene/s
 import {
   reconcileAircraft,
   animateAircraft,
+  getAircraftMarkerData,
+  getAircraftMarkerFromObject,
   type AircraftMarker,
 } from "../scene/airplanes";
 import {
@@ -409,6 +412,7 @@ export function HarborScene({
   > | null>(null);
   const coastlineObjectsRef = useRef<THREE.Object3D[]>([]);
   const raycastTargetsRef = useRef<ShipMesh[]>([]);
+  const aircraftRaycastTargetsRef = useRef<AircraftMarker[]>([]);
   const labelSizesRef = useRef(
     new Map<string, { width: number; height: number }>(),
   );
@@ -478,9 +482,18 @@ export function HarborScene({
     sceneWidth: number;
     sceneHeight: number;
   } | null>(null);
+  const [selectedAircraft, setSelectedAircraft] = useState<{
+    aircraft: AircraftData;
+    x: number;
+    y: number;
+    sceneWidth: number;
+    sceneHeight: number;
+  } | null>(null);
   const selectedShipRef = useRef<typeof selectedShip>(null);
   const selectedFerryRouteRef = useRef<typeof selectedFerryRoute>(null);
+  const selectedAircraftRef = useRef<typeof selectedAircraft>(null);
   const selectedShipMarkerRef = useRef<ShipMesh | null>(null);
+  const selectedAircraftMarkerRef = useRef<AircraftMarker | null>(null);
   const tooltipOpenedAtMsRef = useRef<number>(0);
   const cameraFocusRef = useRef<{
     startMs: number;
@@ -500,6 +513,9 @@ export function HarborScene({
   useEffect(() => {
     selectedFerryRouteRef.current = selectedFerryRoute;
   }, [selectedFerryRoute]);
+  useEffect(() => {
+    selectedAircraftRef.current = selectedAircraft;
+  }, [selectedAircraft]);
 
   const handleShipClick = useCallback(
     (ship: ShipData, worldPos: THREE.Vector3, marker?: ShipMesh) => {
@@ -511,6 +527,8 @@ export function HarborScene({
       const y = (-projected.y + 1) * 0.5 * sceneRect.height;
       tooltipOpenedAtMsRef.current = performance.now();
       selectedShipMarkerRef.current = marker ?? null;
+      selectedAircraftMarkerRef.current = null;
+      setSelectedAircraft(null);
       setSelectedFerryRoute(null);
       setSelectedShip({
         ship,
@@ -532,9 +550,40 @@ export function HarborScene({
       const x = (projected.x + 1) * 0.5 * sceneRect.width;
       const y = (-projected.y + 1) * 0.5 * sceneRect.height;
       tooltipOpenedAtMsRef.current = performance.now();
+      selectedShipMarkerRef.current = null;
+      selectedAircraftMarkerRef.current = null;
       setSelectedShip(null);
+      setSelectedAircraft(null);
       setSelectedFerryRoute({
         route,
+        x,
+        y,
+        sceneWidth: sceneRect.width,
+        sceneHeight: sceneRect.height,
+      });
+    },
+    [],
+  );
+
+  const handleAircraftClick = useCallback(
+    (
+      aircraftData: AircraftData,
+      worldPos: THREE.Vector3,
+      marker?: AircraftMarker,
+    ) => {
+      const sceneRect = sceneRef.current?.getBoundingClientRect();
+      const camera = cameraRef.current;
+      if (!sceneRect || !camera) return;
+      const projected = worldPos.clone().project(camera);
+      const x = (projected.x + 1) * 0.5 * sceneRect.width;
+      const y = (-projected.y + 1) * 0.5 * sceneRect.height;
+      tooltipOpenedAtMsRef.current = performance.now();
+      selectedShipMarkerRef.current = null;
+      selectedAircraftMarkerRef.current = marker ?? null;
+      setSelectedShip(null);
+      setSelectedFerryRoute(null);
+      setSelectedAircraft({
+        aircraft: aircraftData,
         x,
         y,
         sceneWidth: sceneRect.width,
@@ -547,7 +596,9 @@ export function HarborScene({
   const handleClose = useCallback(() => {
     setSelectedShip(null);
     setSelectedFerryRoute(null);
+    setSelectedAircraft(null);
     selectedShipMarkerRef.current = null;
+    selectedAircraftMarkerRef.current = null;
     tooltipOpenedAtMsRef.current = 0;
     cameraFocusRef.current = null;
   }, []);
@@ -977,7 +1028,12 @@ export function HarborScene({
       raycasterRef.current.setFromCamera(pointerRef.current, cameraRef.current);
 
       raycastTargets.length = 0;
+      const aircraftRaycastTargets = aircraftRaycastTargetsRef.current;
+      aircraftRaycastTargets.length = 0;
       for (const marker of shipMarkers.values()) raycastTargets.push(marker);
+      for (const marker of aircraftMarkersRef.current.values()) {
+        aircraftRaycastTargets.push(marker);
+      }
       const hits = raycasterRef.current.intersectObjects(raycastTargets, true);
       const hoveredMarker =
         hits.length > 0 ? getShipMarkerFromObject(hits[0].object) : null;
@@ -1001,6 +1057,24 @@ export function HarborScene({
         hoveredMarker.material.color.copy(hoverColorRef.current);
         mount.style.cursor = "pointer";
       } else {
+        const aircraftHits = raycasterRef.current.intersectObjects(
+          aircraftRaycastTargets,
+          true,
+        );
+        const hoveredAircraft =
+          aircraftHits.length > 0
+            ? getAircraftMarkerFromObject(aircraftHits[0].object)
+            : null;
+        if (hoveredAircraft) {
+          if (prevHoveredFerry) {
+            const routeData = getFerryRouteData(prevHoveredFerry);
+            setFerryLineColor(prevHoveredFerry, routeData.baseColor);
+            hoveredFerryRef.current = null;
+          }
+          mount.style.cursor = "pointer";
+          hoveredShipRef.current = hoveredMarker;
+          return;
+        }
         const ferryHits = raycasterRef.current.intersectObjects(
           ferryRouteTargets,
           true,
@@ -1047,7 +1121,12 @@ export function HarborScene({
       raycasterRef.current.setFromCamera(pointerRef.current, cameraRef.current);
 
       raycastTargets.length = 0;
+      const aircraftRaycastTargets = aircraftRaycastTargetsRef.current;
+      aircraftRaycastTargets.length = 0;
       for (const marker of shipMarkers.values()) raycastTargets.push(marker);
+      for (const marker of aircraftMarkersRef.current.values()) {
+        aircraftRaycastTargets.push(marker);
+      }
       const hits = raycasterRef.current.intersectObjects(raycastTargets, true);
       const marker =
         hits.length > 0 ? getShipMarkerFromObject(hits[0].object) : null;
@@ -1080,6 +1159,51 @@ export function HarborScene({
           toTarget: marker.position.clone(),
         };
         handleShipClick(focusedShip, marker.position, marker);
+        return;
+      }
+
+      const aircraftHits = raycasterRef.current.intersectObjects(
+        aircraftRaycastTargets,
+        true,
+      );
+      const aircraftMarker =
+        aircraftHits.length > 0
+          ? getAircraftMarkerFromObject(aircraftHits[0].object)
+          : null;
+      if (aircraftMarker) {
+        const markerData = getAircraftMarkerData(aircraftMarker);
+        const focusedAircraft = markerData.aircraft;
+        if (selectedAircraftRef.current?.aircraft.hex === focusedAircraft.hex) {
+          handleClose();
+          return;
+        }
+        const zoomByClass = {
+          light: 54,
+          medium: 66,
+          heavy: 78,
+        } as const;
+        const zoomDist = THREE.MathUtils.clamp(
+          zoomByClass[markerData.sizeClass],
+          Math.max(46, controls.minDistance + 8),
+          Math.max(controls.minDistance + 8, controls.maxDistance * 0.5),
+        );
+        const azimuth = controls.getAzimuthalAngle();
+        const sinP = Math.sin(INITIAL_POLAR_ANGLE);
+        const cosP = Math.cos(INITIAL_POLAR_ANGLE);
+        const nextCamera = new THREE.Vector3(
+          aircraftMarker.position.x + zoomDist * sinP * Math.sin(azimuth),
+          aircraftMarker.position.y + zoomDist * cosP,
+          aircraftMarker.position.z + zoomDist * sinP * Math.cos(azimuth),
+        );
+        cameraFocusRef.current = {
+          startMs: performance.now(),
+          durationMs: 900,
+          fromCamera: camera.position.clone(),
+          toCamera: nextCamera,
+          fromTarget: controls.target.clone(),
+          toTarget: aircraftMarker.position.clone(),
+        };
+        handleAircraftClick(focusedAircraft, aircraftMarker.position, aircraftMarker);
         return;
       }
 
@@ -1319,24 +1443,83 @@ export function HarborScene({
       }
       controls.update();
       const hasOpenTooltip =
-        selectedShipRef.current != null || selectedFerryRouteRef.current != null;
+        selectedShipRef.current != null ||
+        selectedFerryRouteRef.current != null ||
+        selectedAircraftRef.current != null;
       const tooltipCloseDistance = controls.maxDistance * 0.72;
       const tooltipOpenAgeMs = time - tooltipOpenedAtMsRef.current;
       const currentCameraDistance = camera.position.distanceTo(controls.target);
+      let shouldCloseSelectedEntityOffscreen = false;
+      const selectedMarker = selectedShipMarkerRef.current;
+      if (selectedMarker && selectedShipRef.current && sceneRef.current) {
+        const projected = selectedMarker.position.clone().project(camera);
+        const offscreenMargin = 0.16;
+        const offscreenX =
+          projected.x < -1 - offscreenMargin ||
+          projected.x > 1 + offscreenMargin;
+        const offscreenY =
+          projected.y < -1 - offscreenMargin ||
+          projected.y > 1 + offscreenMargin;
+        const behindCamera = projected.z > 1;
+        shouldCloseSelectedEntityOffscreen =
+          offscreenX || offscreenY || behindCamera;
+      }
+      const selectedAircraftMarker = selectedAircraftMarkerRef.current;
+      if (
+        !shouldCloseSelectedEntityOffscreen &&
+        selectedAircraftMarker &&
+        selectedAircraftRef.current &&
+        sceneRef.current
+      ) {
+        const projected = selectedAircraftMarker.position.clone().project(camera);
+        const offscreenMargin = 0.16;
+        const offscreenX =
+          projected.x < -1 - offscreenMargin ||
+          projected.x > 1 + offscreenMargin;
+        const offscreenY =
+          projected.y < -1 - offscreenMargin ||
+          projected.y > 1 + offscreenMargin;
+        const behindCamera = projected.z > 1;
+        shouldCloseSelectedEntityOffscreen =
+          offscreenX || offscreenY || behindCamera;
+      }
       if (
         hasOpenTooltip &&
         cameraFocusRef.current == null &&
         tooltipOpenAgeMs > 450 &&
-        currentCameraDistance >= tooltipCloseDistance
+        (currentCameraDistance >= tooltipCloseDistance ||
+          shouldCloseSelectedEntityOffscreen)
       ) {
         handleClose();
       }
-      const selectedMarker = selectedShipMarkerRef.current;
       if (selectedMarker && selectedShipRef.current && sceneRef.current) {
         const projected = selectedMarker.position.clone().project(camera);
         const nextX = (projected.x + 1) * 0.5 * sceneRef.current.clientWidth;
         const nextY = (-projected.y + 1) * 0.5 * sceneRef.current.clientHeight;
         setSelectedShip((prev) => {
+          if (!prev) return prev;
+          if (
+            Math.abs(prev.x - nextX) < 0.5 &&
+            Math.abs(prev.y - nextY) < 0.5 &&
+            prev.sceneWidth === sceneRef.current!.clientWidth &&
+            prev.sceneHeight === sceneRef.current!.clientHeight
+          ) {
+            return prev;
+          }
+          return {
+            ...prev,
+            x: nextX,
+            y: nextY,
+            sceneWidth: sceneRef.current!.clientWidth,
+            sceneHeight: sceneRef.current!.clientHeight,
+          };
+        });
+      }
+      if (selectedAircraftMarker && selectedAircraftRef.current && sceneRef.current) {
+        const projected = selectedAircraftMarker.position.clone().project(camera);
+        const nextX = (projected.x + 1) * 0.5 * sceneRef.current.clientWidth;
+        const nextY = (-projected.y + 1) * 0.5 * sceneRef.current.clientHeight;
+        setSelectedAircraft((prev) => {
           if (!prev) return prev;
           if (
             Math.abs(prev.x - nextX) < 0.5 &&
@@ -1479,6 +1662,7 @@ export function HarborScene({
       }
       aircraftMarkersRef.current.clear();
       raycastTargets.length = 0;
+      aircraftRaycastTargetsRef.current.length = 0;
       ferryRouteTargets.length = 0;
       labelSizes.clear();
       disposeFerryRoutes(scene);
@@ -1822,6 +2006,16 @@ export function HarborScene({
           y={selectedFerryRoute.y}
           sceneWidth={selectedFerryRoute.sceneWidth}
           sceneHeight={selectedFerryRoute.sceneHeight}
+          onClose={handleClose}
+        />
+      )}
+      {selectedAircraft && (
+        <AircraftInfoCard
+          aircraft={selectedAircraft.aircraft}
+          x={selectedAircraft.x}
+          y={selectedAircraft.y}
+          sceneWidth={selectedAircraft.sceneWidth}
+          sceneHeight={selectedAircraft.sceneHeight}
           onClose={handleClose}
         />
       )}

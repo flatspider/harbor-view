@@ -241,8 +241,18 @@ export interface AircraftMarkerData {
 
 export type AircraftMarker = THREE.Group;
 
-function getAircraftMarkerData(group: THREE.Object3D): AircraftMarkerData {
+export function getAircraftMarkerData(group: THREE.Object3D): AircraftMarkerData {
   return group.userData as AircraftMarkerData;
+}
+
+export function getAircraftMarkerFromObject(object: THREE.Object3D | null): AircraftMarker | null {
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    const data = current.userData as Partial<AircraftMarkerData>;
+    if (data.isAircraftMarker === true) return current as AircraftMarker;
+    current = current.parent;
+  }
+  return null;
 }
 
 function isSharedAircraftModelAsset(object: THREE.Object3D): boolean {

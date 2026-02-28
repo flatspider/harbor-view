@@ -36,7 +36,11 @@ import {
   animateWaterTiles,
   disposeWaterTiles,
 } from "../scene/ocean";
-import { reconcileShips, animateShips, sanitizeShipSpeedKnots } from "../scene/ships";
+import {
+  reconcileShips,
+  animateShips,
+  sanitizeShipSpeedKnots,
+} from "../scene/ships";
 import {
   reconcileAircraft,
   animateAircraft,
@@ -139,11 +143,17 @@ const SHOW_SCENE_DEBUG_PANELS = false;
 const FASTEST_SHIP_MIN_OBSERVED_SPEED_KNOTS = 1.2;
 const FASTEST_SHIP_MIN_OBSERVED_SAMPLE_MS = 1_000;
 
-function estimateObservedTelemetrySpeedKnots(markerData: ReturnType<typeof getShipMarkerData>): number {
-  const dtMs = markerData.motion.anchorTimeMs - markerData.motion.prevAnchorTimeMs;
-  if (!Number.isFinite(dtMs) || dtMs < FASTEST_SHIP_MIN_OBSERVED_SAMPLE_MS) return 0;
-  const dx = markerData.motion.anchorPosition.x - markerData.motion.prevAnchorPosition.x;
-  const dz = markerData.motion.anchorPosition.z - markerData.motion.prevAnchorPosition.z;
+function estimateObservedTelemetrySpeedKnots(
+  markerData: ReturnType<typeof getShipMarkerData>,
+): number {
+  const dtMs =
+    markerData.motion.anchorTimeMs - markerData.motion.prevAnchorTimeMs;
+  if (!Number.isFinite(dtMs) || dtMs < FASTEST_SHIP_MIN_OBSERVED_SAMPLE_MS)
+    return 0;
+  const dx =
+    markerData.motion.anchorPosition.x - markerData.motion.prevAnchorPosition.x;
+  const dz =
+    markerData.motion.anchorPosition.z - markerData.motion.prevAnchorPosition.z;
   const distanceUnits = Math.hypot(dx, dz);
   const distanceMeters = distanceUnits / WORLD_UNITS_PER_METER;
   const metersPerSecond = distanceMeters / (dtMs / 1000);
@@ -353,13 +363,17 @@ function createFastestShipIndicator(): THREE.Group {
   return group;
 }
 
-function applyNightLookToObject(object: THREE.Object3D, enabled: boolean): void {
+function applyNightLookToObject(
+  object: THREE.Object3D,
+  enabled: boolean,
+): void {
   object.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
     const material = child.material;
     if (Array.isArray(material)) {
       for (const mat of material) {
-        if (mat instanceof THREE.MeshToonMaterial) applyNightToonLook(mat, enabled);
+        if (mat instanceof THREE.MeshToonMaterial)
+          applyNightToonLook(mat, enabled);
       }
       return;
     }
@@ -374,8 +388,10 @@ function applyNightLookToMarkers(
   aircraftMarkers: Map<string, AircraftMarker>,
   enabled: boolean,
 ): void {
-  for (const marker of shipMarkers.values()) applyNightLookToObject(marker, enabled);
-  for (const marker of aircraftMarkers.values()) applyNightLookToObject(marker, enabled);
+  for (const marker of shipMarkers.values())
+    applyNightLookToObject(marker, enabled);
+  for (const marker of aircraftMarkers.values())
+    applyNightLookToObject(marker, enabled);
 }
 
 export function HarborScene({
@@ -719,7 +735,7 @@ export function HarborScene({
     );
     // The initial polar angle (from Y-axis) determines the viewing elevation.
     // Locking this prevents camera angle changes that cause water flicker.
-    const INITIAL_POLAR_ANGLE = Math.atan2(0.475, 0.67) * 1.23; // ~10% lower (more horizontal)
+    const INITIAL_POLAR_ANGLE = Math.atan2(0.475, 0.67) * 1.05; // ~10% lower (more horizontal)
     camera.position.set(0, WORLD_DEPTH * 0.67, -WORLD_DEPTH * 0.475);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
@@ -1222,7 +1238,11 @@ export function HarborScene({
           fromTarget: controls.target.clone(),
           toTarget: aircraftMarker.position.clone(),
         };
-        handleAircraftClick(focusedAircraft, aircraftMarker.position, aircraftMarker);
+        handleAircraftClick(
+          focusedAircraft,
+          aircraftMarker.position,
+          aircraftMarker,
+        );
         return;
       }
 
@@ -1260,7 +1280,11 @@ export function HarborScene({
     let nextSkyUpdate = 0;
     let cachedSkySettings: ReturnType<typeof animateSky> | null = null;
     setFerryRouteNight(appliedFerryNight);
-    applyNightLookToMarkers(shipMarkers, aircraftMarkersRef.current, cachedNight);
+    applyNightLookToMarkers(
+      shipMarkers,
+      aircraftMarkersRef.current,
+      cachedNight,
+    );
     const loopToken = frameLoopTokenRef.current + 1;
     frameLoopTokenRef.current = loopToken;
 
@@ -1395,7 +1419,8 @@ export function HarborScene({
         appliedFerryNight = cachedNight;
       }
       const latestShipVisualRevision = shipVisualAssetsRevisionRef.current;
-      const latestAircraftVisualRevision = aircraftVisualAssetsRevisionRef.current;
+      const latestAircraftVisualRevision =
+        aircraftVisualAssetsRevisionRef.current;
       if (
         cachedNight !== appliedModelNight ||
         latestShipVisualRevision !== appliedShipVisualRevision ||
@@ -1439,7 +1464,8 @@ export function HarborScene({
             const observedSog = estimateObservedTelemetrySpeedKnots(markerData);
             if (observedSog < FASTEST_SHIP_MIN_OBSERVED_SPEED_KNOTS) continue;
             const candidateSog = Math.min(reportedSog, observedSog);
-            if (!Number.isFinite(candidateSog) || candidateSog <= fastestSog) continue;
+            if (!Number.isFinite(candidateSog) || candidateSog <= fastestSog)
+              continue;
             fastestSog = candidateSog;
             fastestMmsi = markerData.mmsi;
           }
@@ -1448,7 +1474,7 @@ export function HarborScene({
         }
         const fastestMmsi = fastestShipMmsiRef.current;
         const fastestMarker =
-          fastestMmsi != null ? shipMarkers.get(fastestMmsi) ?? null : null;
+          fastestMmsi != null ? (shipMarkers.get(fastestMmsi) ?? null) : null;
         if (!fastestMarker || !fastestMarker.visible) {
           fastestShipIndicator.visible = false;
         } else {
@@ -1507,7 +1533,9 @@ export function HarborScene({
         selectedAircraftRef.current &&
         sceneRef.current
       ) {
-        const projected = selectedAircraftMarker.position.clone().project(camera);
+        const projected = selectedAircraftMarker.position
+          .clone()
+          .project(camera);
         const offscreenMargin = 0.16;
         const offscreenX =
           projected.x < -1 - offscreenMargin ||
@@ -1551,8 +1579,14 @@ export function HarborScene({
           };
         });
       }
-      if (selectedAircraftMarker && selectedAircraftRef.current && sceneRef.current) {
-        const projected = selectedAircraftMarker.position.clone().project(camera);
+      if (
+        selectedAircraftMarker &&
+        selectedAircraftRef.current &&
+        sceneRef.current
+      ) {
+        const projected = selectedAircraftMarker.position
+          .clone()
+          .project(camera);
         const nextX = (projected.x + 1) * 0.5 * sceneRef.current.clientWidth;
         const nextY = (-projected.y + 1) * 0.5 * sceneRef.current.clientHeight;
         setSelectedAircraft((prev) => {
@@ -1987,13 +2021,18 @@ export function HarborScene({
                     value={lightingValues.toneMapping}
                     disabled={!lightingOverride}
                     onChange={(e) =>
-                      handleLightingChange("toneMapping", Number(e.target.value))
+                      handleLightingChange(
+                        "toneMapping",
+                        Number(e.target.value),
+                      )
                     }
                   >
                     <option value={THREE.NoToneMapping}>None</option>
                     <option value={THREE.LinearToneMapping}>Linear</option>
                     <option value={THREE.ReinhardToneMapping}>Reinhard</option>
-                    <option value={THREE.ACESFilmicToneMapping}>ACES Filmic</option>
+                    <option value={THREE.ACESFilmicToneMapping}>
+                      ACES Filmic
+                    </option>
                   </select>
                 </label>
 

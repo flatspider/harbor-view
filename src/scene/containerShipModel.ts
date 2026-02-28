@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { convertToToonMaterial } from "./convertToToon";
+import { captureBaseToonLook } from "./modelLook";
 
 interface ContainerShipMetrics {
   length: number;
@@ -13,7 +14,7 @@ const CONTAINER_SHIP_MODEL_URL = "/models/container-ship-optimized.glb";
 const CONTAINER_SHIP_FALLBACK_MODEL_URL = "/models/Meshy_AI_Colorful_Container_Sh_0226194049_texture.glb";
 const DRACO_DECODER_PATH = "/draco/";
 const CONTAINER_SHIP_TARGET_LENGTH = 25;
-const CONTAINER_SHIP_BASE_Y = 5.2;
+const CONTAINER_SHIP_BASE_Y = 1;
 const CONTAINER_SHIP_SINK_RATIO = 0.34;
 const CONTAINER_SHIP_MODEL_NAME = "ship-category-model";
 const CONTAINER_SHIP_METRICS_KEY = "__containerShipMetrics";
@@ -32,15 +33,24 @@ function applyToonContainerShipMaterial(mesh: THREE.Mesh): void {
 
     const toon = convertToToonMaterial(source);
 
-    // Brighten / saturate the toon color
-    toon.color.getHSL(_hsl);
-    toon.color.setHSL(
-      _hsl.h,
-      Math.min(1, _hsl.s * 1.2 + 0.05),
-      Math.min(0.72, _hsl.l * 1.22 + 0.06),
-    );
-    toon.emissive.copy(toon.color);
-    toon.emissiveIntensity = 0.15;
+    // Keep texture-mapped materials neutral so texture colors stay readable.
+    if (!toon.map) {
+      toon.color.getHSL(_hsl);
+      toon.color.setHSL(
+        _hsl.h,
+        Math.min(1, _hsl.s * 1.12 + 0.03),
+        Math.min(0.62, _hsl.l * 1.05 + 0.01),
+      );
+    }
+    if (toon.map) {
+      toon.emissive.setRGB(1, 1, 1);
+      toon.emissiveMap = toon.map;
+      toon.emissiveIntensity = 0.2;
+    } else {
+      toon.emissive.copy(toon.color);
+      toon.emissiveIntensity = 0.05;
+    }
+    captureBaseToonLook(toon);
     toon.needsUpdate = true;
 
     toon.userData[CONTAINER_SHIP_STYLED_MATERIAL_KEY] = true;

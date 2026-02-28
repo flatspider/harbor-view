@@ -71,6 +71,7 @@ const CURRENT_ARROW_SPACING = 170;
 const CURRENT_ARROW_Y_OFFSET = 1.5;
 const MAX_ARROW_COUNT = 140;
 const MIN_ARROW_SPEED = 0.14;
+const SHOW_CURRENT_ARROWS = false;
 const FLOW_CELLS: FlowCell[] = [
   { x: WORLD_WIDTH * -0.18, z: WORLD_DEPTH * -0.2, radius: 360, strength: 0.5, clockwise: true },
   { x: WORLD_WIDTH * 0.16, z: WORLD_DEPTH * -0.06, radius: 320, strength: 0.42, clockwise: false },
@@ -452,7 +453,9 @@ export function createWaterTiles(scene: THREE.Scene): WaterTile[] {
     _landMaskApplied = true;
   }
 
-  createCurrentArrows(scene, minX, maxX, minZ, maxZ);
+  if (SHOW_CURRENT_ARROWS) {
+    createCurrentArrows(scene, minX, maxX, minZ, maxZ);
+  }
 
   return tiles;
 }
@@ -504,7 +507,9 @@ export function animateWaterTiles(
     tile.normalTexture.offset.set(_normalDrift.x, _normalDrift.y);
   }
 
-  animateCurrentArrows(effectiveEnv, t);
+  if (SHOW_CURRENT_ARROWS) {
+    animateCurrentArrows(effectiveEnv, t);
+  }
 
   const springBoost = env.isSpringTide ? 1.15 : 1.0;
   const waveIntensity = THREE.MathUtils.clamp(env.waveHeightM / 1.7, 0.18, 2.4) * springBoost;

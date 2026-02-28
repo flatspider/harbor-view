@@ -6,7 +6,7 @@ import * as THREE from "three";
  * instead of blending smoothly — this is what gives the cartoon look.
  */
 export function createToonGradientMap(steps = 4): THREE.DataTexture {
-  const values = [90, 160, 215, 255];
+  const values = [42, 108, 192, 255];
   const data = new Uint8Array(steps * 4);
   for (let i = 0; i < steps; i++) {
     const v = values[i] ?? Math.round((i / (steps - 1)) * 255);

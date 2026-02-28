@@ -19,9 +19,13 @@
     "data:build-skyline-smoke": "bun run scripts/build-manhattan-skyline-smoke.ts",
     "data:clean-land": "bun run scripts/clean-land-polygons.ts",
     "fetch-ferry-routes": "bun run scripts/fetch-ferry-routes.ts",
-    "assets:optimize-passenger-ferry": "bunx gltf-transform optimize public/models/Meshy_AI_Orange_Ferry_at_Sea_0226181516_texture.glb public/models/passenger-ferry-optimized.glb --compress draco --texture-compress auto --texture-size 512 --simplify-ratio 0 --simplify-error 0.01",
-    "assets:optimize-container-ship": "bunx gltf-transform optimize public/models/Meshy_AI_Colorful_Container_Sh_0226194049_texture.glb public/models/container-ship-optimized.glb --compress draco --texture-compress auto --texture-size 512 --simplify-ratio 0 --simplify-error 0.01",
-    "assets:optimize-airplane": "bunx gltf-transform optimize public/models/Meshy_AI_Skybound_Ark_0226195620_texture.glb public/models/airplane-optimized.glb --compress draco --texture-compress auto --texture-size 512 --simplify-ratio 0 --simplify-error 0.01",
+    "assets:optimize-passenger-ferry": "bunx gltf-transform optimize public/models/Meshy_AI_Orange_Ferry_at_Sea_0226181516_texture.glb public/models/passenger-ferry-optimized.glb --compress draco --texture-compress auto --texture-size 2048 --palette false --simplify-ratio 0",
+    "assets:optimize-container-ship": "bunx gltf-transform optimize public/models/Meshy_AI_Colorful_Container_Sh_0226194049_texture.glb public/models/container-ship-optimized.glb --compress draco --texture-compress auto --texture-size 2048 --palette false --simplify-ratio 0",
+    "assets:optimize-small-boat": "bunx gltf-transform optimize public/models/Meshy_AI_The_Red_Tugboat_0227234358_texture.glb public/models/small-boat-optimized.glb --compress draco --texture-compress auto --texture-size 2048 --palette false --simplify-ratio 0",
+    "assets:optimize-airplane": "bunx gltf-transform optimize public/models/Meshy_AI_Skybound_Ark_0226195620_texture.glb public/models/airplane-optimized.glb --compress draco --texture-compress auto --texture-size 1024 --palette false --simplify-ratio 0",
+    "assets:optimize-aircraft-glider": "bunx gltf-transform optimize public/models/Meshy_AI_Blue_Winged_Sky_Racer_0227211314_texture.glb public/models/glider-optimized.glb --compress draco --texture-compress auto --texture-size 1024 --palette false --simplify-ratio 0",
+    "assets:optimize-aircraft-biplane": "bunx gltf-transform optimize public/models/Meshy_AI_Golden_Biplane_0227212937_texture.glb public/models/biplane-optimized.glb --compress false --texture-compress auto --texture-size 2048 --palette false --simplify-ratio 0",
+    "assets:optimize-aircraft-zeppelin": "bunx gltf-transform optimize public/models/Meshy_AI_Skybound_Ark_0226195620_texture.glb public/models/zeppelin-optimized.glb --compress false --texture-compress auto --texture-size 2048 --palette false --simplify-ratio 0",
     "preview": "NODE_ENV=production bun run server.ts"
   },
   "dependencies": {
